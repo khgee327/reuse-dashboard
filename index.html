@@ -48,7 +48,7 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
-          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리</p>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v4</span></p>
         </div>
       </div>
 
@@ -1069,7 +1069,7 @@ async function loadSourceList() {
 function renderSourceList() {
   const onlyReuse = $('impOnlyReuse').checked;
   const q = $('impSearch').value.trim().toLowerCase();
-  const imported = new Set(records.map(r => r.sourceId).filter(Boolean));
+  const imported = new Set(records.map(r => String(r.sourceId)).filter(v => v && v !== 'null'));
 
   const list = sourceList.filter(p => {
     if (onlyReuse && !(p.types && p.types.reuse)) return false;
@@ -1078,10 +1078,11 @@ function renderSourceList() {
   });
 
   $('impList').innerHTML = list.length ? list.map(p => {
-    const done = imported.has(p.id);
+    const idx = String(sourceList.indexOf(p));
+    const done = imported.has(String(p.id));
     const chs = guessChannels(p), tps = guessTypes(p);
     return '<label class="flex items-start gap-3 p-3 rounded-xl border ' + (done ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 hover:border-yellow-300 cursor-pointer') + '">' +
-      '<input type="checkbox" ' + (done ? 'disabled' : '') + ' ' + (impChecked.has(p.id) ? 'checked' : '') + ' onchange="toggleImp(\'' + p.id + '\', this.checked)" class="mt-1 accent-yellow-500">' +
+      '<input type="checkbox" ' + (done ? 'disabled' : '') + ' ' + (impChecked.has(idx) ? 'checked' : '') + ' onchange="toggleImp(\'' + idx + '\', this.checked)" class="mt-1 accent-yellow-500">' +
       '<div class="flex-1 min-w-0">' +
         '<div class="flex flex-wrap items-center gap-1.5">' +
           '<span class="text-xs font-bold text-slate-800">' + esc(p.realName || p.influencer || '이름 없음') + '</span>' +
@@ -1100,10 +1101,10 @@ function toggleImp(id, on) { on ? impChecked.add(id) : impChecked.delete(id); }
 function doImport() {
   if (!impChecked.size) { toast('가져올 건을 선택해 주세요.', 'err'); return; }
   let n = 0;
-  sourceList.forEach(p => {
-    if (!impChecked.has(p.id)) return;
+  sourceList.forEach((p, i) => {
+    if (!impChecked.has(String(i))) return;
     records.unshift({
-      id: uid(), sourceId: p.id, createdAt: Date.now(), updatedAt: Date.now(),
+      id: uid(), sourceId: String(p.id != null ? p.id : 'idx' + i), createdAt: Date.now(), updatedAt: Date.now(),
       brand: p.brand || '온살',
       name: p.realName || p.influencer || '',
       account: p.influencer || '',
@@ -1116,6 +1117,7 @@ function doImport() {
     });
     n++;
   });
+  if (!n) { toast('가져오지 못했습니다. 목록 새로고침 후 다시 선택해 주세요.', 'err'); return; }
   impChecked = new Set();
   saveAll(); closeImportModal(); render();
   toast(n + '건을 가져왔습니다. 2차 활용 조건을 채워 주세요.', 'ok');
