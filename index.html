@@ -386,13 +386,23 @@
         <label class="block text-[11px] font-semibold text-slate-600 mb-1">Apps Script 웹앱 주소 (저장용)</label>
         <input type="text" id="setSyncUrl" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 mb-1">이 대시보드 저장 키</label>
+        <input type="text" id="setSyncKey" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+      </div>
+
+      <div class="border-t border-slate-100 pt-4 space-y-3">
+        <p class="text-[11px] font-bold text-yellow-800">기존 PPL 대시보드에서 불러오기 (읽기 전용)</p>
+        <p class="text-[11px] text-slate-500 leading-relaxed bg-yellow-50 p-3 rounded-xl">
+          저장은 위 주소로, 불러오기는 아래 주소로 따로 처리됩니다. 두 주소가 달라도 되니 왔다갔다 바꿀 필요가 없습니다.
+          비워두면 위 저장용 주소를 그대로 사용합니다.
+        </p>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 mb-1">이 대시보드 저장 키</label>
-          <input type="text" id="setSyncKey" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          <label class="block text-[11px] font-semibold text-slate-600 mb-1">기존 대시보드 Apps Script 주소</label>
+          <input type="text" id="setSourceUrl" placeholder="비워두면 위 저장용 주소를 사용합니다" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 mb-1">불러오기용 기존 대시보드 키</label>
+          <label class="block text-[11px] font-semibold text-slate-600 mb-1">기존 대시보드 저장 키</label>
           <input type="text" id="setSourceKey" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
         </div>
       </div>
@@ -415,8 +425,10 @@
 const DEFAULTS = {
   syncUrl: 'https://script.google.com/macros/s/AKfycbzLKUEHFm36G4wP4Lw2Tw4pFeFufbI0zcTEJ298kDT-gvLRpafpaYGlH24uMD3PDikVqA/exec',
   syncKey: 'khj327_reuse',
+  sourceUrl: 'https://script.google.com/macros/s/AKfycbzLKUEHFm36G4wP4Lw2Tw4pFeFufbI0zcTEJ298kDT-gvLRpafpaYGlH24uMD3PDikVqA/exec',
   sourceKey: 'khj327'
 };
+const sourceEndpoint = () => (CFG.sourceUrl || CFG.syncUrl);
 let CFG = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('reuse_cfg') || '{}'));
 
 const BASE_CHANNELS      = ['유튜브', '인스타그램'];
@@ -646,6 +658,7 @@ async function syncNow() {
 function openSettings() {
   $('setSyncUrl').value = CFG.syncUrl;
   $('setSyncKey').value = CFG.syncKey;
+  $('setSourceUrl').value = CFG.sourceUrl || '';
   $('setSourceKey').value = CFG.sourceKey;
   $('settingsModal').classList.remove('hidden');
 }
@@ -653,6 +666,7 @@ function closeSettings() { $('settingsModal').classList.add('hidden'); }
 async function saveSettings() {
   CFG.syncUrl   = $('setSyncUrl').value.trim() || DEFAULTS.syncUrl;
   CFG.syncKey   = $('setSyncKey').value.trim() || DEFAULTS.syncKey;
+  CFG.sourceUrl = $('setSourceUrl').value.trim();
   CFG.sourceKey = $('setSourceKey').value.trim() || DEFAULTS.sourceKey;
   localStorage.setItem('reuse_cfg', JSON.stringify(CFG));
   closeSettings();
@@ -1039,7 +1053,7 @@ async function loadSourceList() {
   $('impStatus').innerText = '불러오는 중...';
   $('impList').innerHTML = '';
   try {
-    const res = await fetch(CFG.syncUrl + '?key=' + encodeURIComponent(CFG.sourceKey) + '&t=' + Date.now());
+    const res = await fetch(sourceEndpoint() + '?key=' + encodeURIComponent(CFG.sourceKey) + '&t=' + Date.now());
     const json = await res.json();
     if (!json.ok) throw new Error('load failed');
     sourceList = (json.data && json.data.onsal_pplList) || [];
@@ -1048,7 +1062,7 @@ async function loadSourceList() {
     renderSourceList();
   } catch (e) {
     $('impStatus').innerText = '';
-    $('impList').innerHTML = '<p class="text-xs text-rose-500 p-4 text-center">기존 대시보드 데이터를 불러오지 못했습니다. 설정에서 주소와 키를 확인해 주세요.</p>';
+    $('impList').innerHTML = '<p class="text-xs text-rose-500 p-4 text-center">기존 대시보드 데이터를 불러오지 못했습니다.<br>설정 → <b>기존 대시보드 Apps Script 주소</b>와 키를 확인해 주세요.</p>';
   }
 }
 
