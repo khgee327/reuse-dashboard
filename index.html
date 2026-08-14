@@ -48,7 +48,7 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
-          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v6</span></p>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v7</span></p>
         </div>
       </div>
 
@@ -117,7 +117,7 @@
           <option value="">채널 전체</option><option>유튜브</option><option>인스타그램</option>
         </select>
         <select id="fType" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
-          <option value="">유형 전체</option><option>PPL</option><option>브랜디드</option>
+          <option value="">유형 전체</option><option>PPL</option><option>브랜디드</option><option>마이크로 유튜브</option><option>마이크로 릴스</option>
         </select>
         <select id="fState" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
           <option value="">상태 전체</option>
@@ -440,7 +440,7 @@ let CFG = IS_READONLY ? Object.assign({}, DEFAULTS)
                       : Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('reuse_cfg') || '{}'));
 
 const BASE_CHANNELS      = ['유튜브', '인스타그램'];
-const BASE_TYPES         = ['PPL', '브랜디드'];
+const BASE_TYPES         = ['PPL', '브랜디드', '마이크로 유튜브', '마이크로 릴스'];
 const BASE_EDIT          = ['가공 가능', '가공 불가', '부분 가능(협의)'];
 const BASE_SCOPE         = ['자사몰', '스스(스마트스토어)', '무신사', '쿠팡', '메타'];
 const BASE_RIGHTS        = ['상세페이지', '썸네일', '광고 소재', 'SNS 게시', '성명권', '초상권', '2차 편집본', '오프라인 인쇄물'];
@@ -453,6 +453,9 @@ let viewMode  = localStorage.getItem('reuse_view') || 'card';
 const READONLY = IS_READONLY;
 let editingId = null;
 let sourceList = [];
+let loadState = 'loading';
+let loadError = '';
+let emptyDefaultHtml = '';
 let impChecked = new Set();
 
 const sel = { channels: new Set(), types: new Set(), scope: new Set(), rights: new Set(), edit: '' };
@@ -610,12 +613,15 @@ async function pullFromSheet() {
       if (Array.isArray(d.reuse_optRights)) optRights = d.reuse_optRights;
       saveLocal();
     }
+    loadState = 'ok';
     syncReady = true;
     setSyncStatus('ok', hasRemote ? '시트 연결됨' : '시트 연결됨 (첫 저장 대기)');
     if (!hasRemote) queueSync();
     return true;
   } catch (e) {
     syncReady = false;
+    loadState = 'error';
+    loadError = String(e && e.message ? e.message : e);
     setSyncStatus('error', '시트 연결 실패 (클릭해서 재시도)');
     $('syncStatus').title = '원인: ' + String(e && e.message ? e.message : e);
     if (!READONLY) $('syncWarning').classList.remove('hidden');
@@ -765,9 +771,13 @@ function channelPill(c) {
     ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700"><i class="fa-brands fa-youtube"></i> 유튜브</span>'
     : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700"><i class="fa-brands fa-instagram"></i> ' + esc(c) + '</span>';
 }
-function typePill(t) {
-  return tagPill(t, t === 'PPL' ? 'bg-yellow-100 text-yellow-800' : 'bg-violet-100 text-violet-700');
-}
+const TYPE_COLORS = {
+  'PPL': 'bg-yellow-100 text-yellow-800',
+  '브랜디드': 'bg-violet-100 text-violet-700',
+  '마이크로 유튜브': 'bg-teal-100 text-teal-700',
+  '마이크로 릴스': 'bg-cyan-100 text-cyan-700'
+};
+function typePill(t) { return tagPill(t, TYPE_COLORS[t] || 'bg-slate-100 text-slate-600'); }
 function editPill(e) {
   if (!e) return '';
   const cls = e === '가공 가능' ? 'bg-emerald-100 text-emerald-700' : e === '가공 불가' ? 'bg-rose-100 text-rose-700' : 'bg-orange-100 text-orange-700';
@@ -871,6 +881,20 @@ function render() {
   $('resultCount').innerText = list.length;
 
   const showEmpty = records.length === 0;
+  if (showEmpty) {
+    const box = $('emptyState');
+    if (loadState === 'loading') {
+      box.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-3xl text-yellow-300"></i>' +
+        '<p class="mt-3 text-sm font-bold text-slate-600">데이터를 불러오는 중입니다...</p>';
+    } else if (loadState === 'error') {
+      box.innerHTML = '<i class="fa-solid fa-plug-circle-xmark text-3xl text-rose-300"></i>' +
+        '<p class="mt-3 text-sm font-bold text-rose-600">데이터를 불러오지 못했습니다.</p>' +
+        '<p class="mt-1 text-xs text-slate-500">원인: ' + esc(loadError) + '</p>' +
+        '<p class="mt-1 text-[11px] text-slate-400">저장소 주소: ' + esc(String(CFG.syncUrl).slice(0, 60)) + '... / 키: ' + esc(CFG.syncKey) + '</p>';
+    } else {
+      box.innerHTML = emptyDefaultHtml;
+    }
+  }
   $('emptyState').classList.toggle('hidden', !showEmpty);
   $('cardWrap').classList.toggle('hidden', showEmpty || viewMode !== 'card');
   $('tableWrap').classList.toggle('hidden', showEmpty || viewMode !== 'table');
@@ -903,7 +927,9 @@ function chipBtn(group, val, active, activeCls) {
 
 function renderChips() {
   $('fmChannels').innerHTML   = BASE_CHANNELS.map(v => chipBtn('channels', v, sel.channels.has(v), 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
-  $('fmTypes').innerHTML      = BASE_TYPES.map(v => chipBtn('types', v, sel.types.has(v), 'bg-violet-500 text-white border-violet-500 shadow-xs')).join('');
+  const typeActive = { 'PPL': 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs', '브랜디드': 'bg-violet-500 text-white border-violet-500 shadow-xs',
+                       '마이크로 유튜브': 'bg-teal-500 text-white border-teal-500 shadow-xs', '마이크로 릴스': 'bg-cyan-500 text-white border-cyan-500 shadow-xs' };
+  $('fmTypes').innerHTML      = BASE_TYPES.map(v => chipBtn('types', v, sel.types.has(v), typeActive[v] || 'bg-violet-500 text-white border-violet-500 shadow-xs')).join('');
   $('fmEdit').innerHTML       = BASE_EDIT.map(v => chipBtn('edit', v, sel.edit === v, 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
   $('fmScopeChannels').innerHTML = optScope.map(v => chipBtn('scope', v, sel.scope.has(v), 'bg-emerald-500 text-white border-emerald-500 shadow-xs')).join('');
   $('fmUsageRights').innerHTML   = optRights.map(v => chipBtn('rights', v, sel.rights.has(v), 'bg-sky-500 text-white border-sky-500 shadow-xs')).join('');
@@ -1065,6 +1091,8 @@ function guessTypes(p) {
   const out = [];
   if (p.types && p.types.ppl) out.push('PPL');
   if (p.types && p.types.branded) out.push('브랜디드');
+  if (p.types && p.types.microPpl) out.push('마이크로 유튜브');
+  if (p.types && p.types.microReels) out.push('마이크로 릴스');
   return out;
 }
 function firstUrl(p) {
@@ -1192,6 +1220,7 @@ document.addEventListener('keydown', e => {
 });
 
 (async function init() {
+  emptyDefaultHtml = $('emptyState').innerHTML;
   applyReadonly();
   setView(viewMode);
   render();
