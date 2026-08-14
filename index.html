@@ -48,7 +48,7 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
-          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v5</span></p>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v6</span></p>
         </div>
       </div>
 
@@ -213,6 +213,12 @@
             <input type="text" id="fmAccount" placeholder="예: @pink_life" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
           </div>
           <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">채널 URL <span class="text-slate-400 font-normal">(이름 클릭 시 이동)</span></label>
+            <input type="text" id="fmChannelUrl" placeholder="https://www.youtube.com/@..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+          <div class="md:col-span-2">
             <label class="block text-[11px] font-semibold text-slate-600 mb-1">진행 제품</label>
             <input type="text" id="fmProduct" placeholder="예: 하이퍼 히알루론 세럼, 비타민 앰플 (쉼표로 구분)" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
           </div>
@@ -738,6 +744,14 @@ function renderScopeFilter() {
   s.value = cur;
 }
 
+function nameHtml(r, cls) {
+  const url = r.channelUrl || r.uploadUrl || '';
+  const label = esc(r.name || '이름 미입력');
+  if (!/^https?:\/\//i.test(url)) return '<span class="' + cls + '">' + label + '</span>';
+  return '<a href="' + esc(url) + '" target="_blank" rel="noopener" title="채널로 이동" class="' + cls + ' hover:underline decoration-2 underline-offset-2">' +
+         label + ' <i class="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400"></i></a>';
+}
+
 const tagPill = (t, cls) => '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + cls + '">' + esc(t) + '</span>';
 
 function productPills(v) {
@@ -777,7 +791,7 @@ function cardHtml(r) {
       '<div class="min-w-0">' +
         '<div class="flex items-center flex-wrap gap-1.5">' +
           tagPill(r.brand || '온살', r.brand === '루메아카이브' ? 'bg-skyblue-100 text-skyblue-700' : 'bg-yellow-100 text-yellow-800') +
-          '<h3 class="text-sm font-bold text-slate-900 truncate">' + esc(r.name || '이름 미입력') + '</h3>' +
+          '<h3 class="text-sm font-bold text-slate-900 truncate">' + nameHtml(r, 'text-slate-900') + '</h3>' +
           (r.account ? '<span class="text-[11px] text-slate-400 truncate">' + esc(r.account) + '</span>' : '') +
         '</div>' +
         '<div class="flex flex-wrap gap-1 mt-1.5">' +
@@ -831,7 +845,7 @@ function rowHtml(r) {
   const total = clipTotal(r);
   const clipsTxt = (r.clips || []).filter(c => c.start || c.end).map(c => esc(c.start || '?') + '~' + esc(c.end || '?')).join(', ');
   return '<tr class="hover:bg-yellow-50/30">' +
-    '<td class="px-3 py-2.5"><p class="font-bold text-slate-800">' + esc(r.name || '—') + '</p><p class="text-[10px] text-slate-400">' + esc(r.account || '') + '</p>' +
+    '<td class="px-3 py-2.5"><p class="font-bold text-slate-800">' + nameHtml(r, 'text-slate-800') + '</p><p class="text-[10px] text-slate-400">' + esc(r.account || '') + '</p>' +
       (r.product ? '<div class="flex flex-wrap gap-1 mt-1 max-w-[220px] whitespace-normal">' + productPills(r.product) + '</div>' : '') + '</td>' +
     '<td class="px-3 py-2.5"><div class="flex flex-wrap gap-1">' + (r.channels || []).map(channelPill).join('') + (r.types || []).map(typePill).join('') + '</div></td>' +
     '<td class="px-3 py-2.5 text-slate-600">' + (r.draftDate || '—') + '<br>' + (r.finalDate || '—') + '</td>' +
@@ -966,6 +980,7 @@ function openForm(id) {
   $('fmName').value       = (r && r.name) || '';
   $('fmAccount').value    = (r && r.account) || '';
   $('fmProduct').value    = (r && r.product) || '';
+  $('fmChannelUrl').value = (r && r.channelUrl) || '';
   $('fmDraft').value      = (r && r.draftDate) || '';
   $('fmFinal').value      = (r && r.finalDate) || '';
   $('fmUpload').value     = (r && r.uploadDate) || '';
@@ -999,6 +1014,7 @@ function saveForm() {
   const data = {
     brand: $('fmBrand').value,
     name, account: $('fmAccount').value.trim(), product: $('fmProduct').value.trim(),
+    channelUrl: $('fmChannelUrl').value.trim(),
     channels: Array.from(sel.channels), types: Array.from(sel.types),
     draftDate: $('fmDraft').value, finalDate: $('fmFinal').value, uploadDate: $('fmUpload').value,
     reuseStart: $('fmStart').value, reuseMonths: monthsVal === 'perm' ? 'perm' : Number(monthsVal),
@@ -1123,7 +1139,7 @@ function doImport() {
       draftDate: stepDate(p, '초안전달'), finalDate: stepDate(p, '최종본전달'), uploadDate: stepDate(p, '업로드'),
       reuseStart: '', reuseMonths: 6,
       scopeChannels: [], usageRights: [], editAllowed: '', editNote: '',
-      clips: [], comment: '', filePath: p.guideUrl || '', uploadUrl: firstUrl(p)
+      clips: [], comment: '', filePath: p.guideUrl || '', channelUrl: firstUrl(p), uploadUrl: ''
     });
     n++;
   });
@@ -1153,7 +1169,7 @@ function exportToExcel() {
       '활용가능범위': (r.usageRights || []).join(', '),
       '제품소개구간': (r.clips || []).map(c => c.start + '~' + c.end).join(', '),
       '총노출초': clipTotal(r),
-      '활용코멘트': r.comment || '', '원본파일경로': r.filePath || '', '업로드URL': r.uploadUrl || ''
+      '활용코멘트': r.comment || '', '원본파일경로': r.filePath || '', '채널URL': r.channelUrl || '', '업로드URL': r.uploadUrl || ''
     };
   });
   const ws = XLSX.utils.json_to_sheet(rows);
