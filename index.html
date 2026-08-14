@@ -48,7 +48,7 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
-          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v4</span></p>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v5</span></p>
         </div>
       </div>
 
@@ -214,7 +214,7 @@
           </div>
           <div>
             <label class="block text-[11px] font-semibold text-slate-600 mb-1">진행 제품</label>
-            <input type="text" id="fmProduct" placeholder="예: 하이퍼 히알루론 세럼" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+            <input type="text" id="fmProduct" placeholder="예: 하이퍼 히알루론 세럼, 비타민 앰플 (쉼표로 구분)" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
           </div>
         </div>
       </div>
@@ -423,13 +423,15 @@
    1. 설정 & 상태
    ========================================================================== */
 const DEFAULTS = {
-  syncUrl: 'https://script.google.com/macros/s/AKfycbzLKUEHFm36G4wP4Lw2Tw4pFeFufbI0zcTEJ298kDT-gvLRpafpaYGlH24uMD3PDikVqA/exec',
-  syncKey: 'khj327_reuse',
+  syncUrl: 'https://script.google.com/macros/s/AKfycbw6-nj_J_-M6NFaznQrbkG9ARopOA7qLrJDYBljIK7ig70_V4txyamVVpiv3jSEQRyD/exec',
+  syncKey: 'reuse',
   sourceUrl: 'https://script.google.com/macros/s/AKfycbzLKUEHFm36G4wP4Lw2Tw4pFeFufbI0zcTEJ298kDT-gvLRpafpaYGlH24uMD3PDikVqA/exec',
   sourceKey: 'khj327'
 };
 const sourceEndpoint = () => (CFG.sourceUrl || CFG.syncUrl);
-let CFG = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('reuse_cfg') || '{}'));
+const IS_READONLY = /(^|[?&])(view|readonly)=1/.test(location.search);
+let CFG = IS_READONLY ? Object.assign({}, DEFAULTS)
+                      : Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('reuse_cfg') || '{}'));
 
 const BASE_CHANNELS      = ['유튜브', '인스타그램'];
 const BASE_TYPES         = ['PPL', '브랜디드'];
@@ -442,7 +444,7 @@ let optScope  = JSON.parse(localStorage.getItem('reuse_optScope') || 'null')  ||
 let optRights = JSON.parse(localStorage.getItem('reuse_optRights')|| 'null')  || BASE_RIGHTS.slice();
 
 let viewMode  = localStorage.getItem('reuse_view') || 'card';
-const READONLY = /(^|[?&])(view|readonly)=1/.test(location.search);
+const READONLY = IS_READONLY;
 let editingId = null;
 let sourceList = [];
 let impChecked = new Set();
@@ -573,7 +575,7 @@ function setSyncStatus(state, text) {
     error:  'px-3 py-2 bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl transition flex items-center gap-1.5',
     idle:   'px-3 py-2 bg-slate-100 text-slate-500 text-xs font-semibold rounded-xl transition flex items-center gap-1.5'
   };
-  btn.className = styles[state] || styles.idle;
+  btn.className = (styles[state] || styles.idle) + (READONLY ? ' hidden' : '');
   label.innerText = text;
 }
 
@@ -589,7 +591,7 @@ async function pullFromSheet() {
     if (d.onsal_pplList || d.onsal_products) {
       syncReady = false;
       setSyncStatus('error', '저장소 충돌 — 저장 중지됨');
-      $('syncWarning').classList.remove('hidden');
+      if (!READONLY) $('syncWarning').classList.remove('hidden');
       $('syncWarning').innerText = '이 저장 키가 기존 PPL 대시보드 데이터와 같은 칸을 가리키고 있어 자동 저장을 멈췄습니다. 설정에서 저장 키를 다른 값으로 바꿔 주세요.';
       return false;
     }
@@ -610,7 +612,7 @@ async function pullFromSheet() {
     syncReady = false;
     setSyncStatus('error', '시트 연결 실패 (클릭해서 재시도)');
     $('syncStatus').title = '원인: ' + String(e && e.message ? e.message : e);
-    $('syncWarning').classList.remove('hidden');
+    if (!READONLY) $('syncWarning').classList.remove('hidden');
     $('syncWarning').innerHTML = '구글 시트에 연결하지 못했습니다. 지금은 이 브라우저에만 저장됩니다. ' +
       '<button onclick="openSettings()" class="underline font-bold">설정 열기</button> · 원인: ' + esc(String(e && e.message ? e.message : e));
     return false;
@@ -738,6 +740,12 @@ function renderScopeFilter() {
 
 const tagPill = (t, cls) => '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + cls + '">' + esc(t) + '</span>';
 
+function productPills(v) {
+  const arr = String(v || '').split(/[,·/|]|,/).map(x => x.trim()).filter(Boolean);
+  if (!arr.length) return '';
+  return arr.map(x => '<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-800 text-white"><i class="fa-solid fa-box text-[9px] opacity-70"></i>' + esc(x) + '</span>').join('');
+}
+
 function channelPill(c) {
   return c === '유튜브'
     ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700"><i class="fa-brands fa-youtube"></i> 유튜브</span>'
@@ -774,7 +782,6 @@ function cardHtml(r) {
         '</div>' +
         '<div class="flex flex-wrap gap-1 mt-1.5">' +
           (r.channels || []).map(channelPill).join('') + (r.types || []).map(typePill).join('') +
-          (r.product ? tagPill(r.product, 'bg-slate-100 text-slate-600') : '') +
         '</div>' +
       '</div>' +
       '<span class="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-xl border ' + s.cls + '">' + esc(s.label) + '</span>' +
@@ -793,6 +800,8 @@ function cardHtml(r) {
     '</div>' +
 
     '<div class="space-y-1.5">' +
+      '<div class="flex items-start gap-2"><span class="text-[10px] font-bold text-slate-400 w-16 shrink-0 pt-1">제품</span>' +
+        '<div class="flex flex-wrap gap-1">' + (productPills(r.product) || '<span class="text-[11px] text-slate-300">미지정</span>') + '</div></div>' +
       '<div class="flex items-start gap-2"><span class="text-[10px] font-bold text-slate-400 w-16 shrink-0 pt-0.5">활용 채널</span>' +
         '<div class="flex flex-wrap gap-1">' + ((r.scopeChannels || []).length ? (r.scopeChannels || []).map(c => tagPill(c, 'bg-emerald-50 text-emerald-700 border border-emerald-100')).join('') : '<span class="text-[11px] text-slate-300">미지정</span>') + '</div></div>' +
       '<div class="flex items-start gap-2"><span class="text-[10px] font-bold text-slate-400 w-16 shrink-0 pt-0.5">활용 범위</span>' +
@@ -822,7 +831,8 @@ function rowHtml(r) {
   const total = clipTotal(r);
   const clipsTxt = (r.clips || []).filter(c => c.start || c.end).map(c => esc(c.start || '?') + '~' + esc(c.end || '?')).join(', ');
   return '<tr class="hover:bg-yellow-50/30">' +
-    '<td class="px-3 py-2.5"><p class="font-bold text-slate-800">' + esc(r.name || '—') + '</p><p class="text-[10px] text-slate-400">' + esc(r.account || '') + '</p></td>' +
+    '<td class="px-3 py-2.5"><p class="font-bold text-slate-800">' + esc(r.name || '—') + '</p><p class="text-[10px] text-slate-400">' + esc(r.account || '') + '</p>' +
+      (r.product ? '<div class="flex flex-wrap gap-1 mt-1 max-w-[220px] whitespace-normal">' + productPills(r.product) + '</div>' : '') + '</td>' +
     '<td class="px-3 py-2.5"><div class="flex flex-wrap gap-1">' + (r.channels || []).map(channelPill).join('') + (r.types || []).map(typePill).join('') + '</div></td>' +
     '<td class="px-3 py-2.5 text-slate-600">' + (r.draftDate || '—') + '<br>' + (r.finalDate || '—') + '</td>' +
     '<td class="px-3 py-2.5 font-bold text-yellow-700">' + (r.uploadDate || '—') + '</td>' +
