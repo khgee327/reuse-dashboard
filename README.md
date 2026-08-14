@@ -1,1 +1,1132 @@
-# reuse-dashboard
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>온살 &amp; 루메아카이브 2차 활용 관리 대시보드</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23d4b46c%22><path d=%22M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z%22/></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            skyblue: { 50:'#f0f9ff',100:'#e0f2fe',200:'#bae6fd',500:'#0ea5e9',600:'#0284c7',700:'#0369a1' },
+            // 형광 노랑 대신 눈이 편한 머스터드/버터 톤
+            yellow: {
+              50:'#fdfbf4', 100:'#f8f1de', 200:'#efe1bd', 300:'#e2cb93',
+              400:'#d4b46c', 500:'#c09b4e', 600:'#a07d3c', 700:'#7d6130',
+              800:'#5c4724', 900:'#3d301a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body { font-family: 'Pretendard', sans-serif; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f8f1de; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #e2cb93; border-radius: 4px; }
+    .chip { cursor: pointer; user-select: none; }
+    .chip input { display: none; }
+    input:focus, select:focus, textarea:focus { outline: none; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body class="bg-yellow-50/40 text-slate-800 min-h-screen pb-20">
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="bg-white/90 backdrop-blur-md border-b border-yellow-100 sticky top-0 z-30 shadow-xs no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="bg-yellow-400 text-slate-900 p-2.5 rounded-2xl shadow-sm shadow-yellow-200">
+          <i class="fa-solid fa-rotate-right text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="openImportModal()" class="px-3 py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-xs">
+          <i class="fa-solid fa-download"></i> 기존 대시보드에서 불러오기
+        </button>
+        <button onclick="exportToExcel()" class="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-xs">
+          <i class="fa-solid fa-file-excel"></i> 엑셀 내보내기
+        </button>
+        <button onclick="openSettings()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-xs">
+          <i class="fa-solid fa-gear"></i> 설정
+        </button>
+        <button id="syncStatus" onclick="syncNow()" title="눌러서 다시 동기화" class="px-3 py-2 bg-slate-100 text-slate-500 text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+          <i class="fa-solid fa-cloud"></i> <span id="syncStatusText">연결 확인 중...</span>
+        </button>
+      </div>
+    </div>
+    <div id="syncWarning" class="hidden bg-rose-50 border-t border-rose-200 text-rose-700 text-xs px-4 py-2 text-center font-semibold"></div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+
+    <!-- ==================== 요약 카드 ==================== -->
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div class="bg-white p-4 rounded-2xl border border-yellow-100 shadow-sm">
+        <p class="text-[11px] font-semibold text-slate-500 flex items-center gap-1"><i class="fa-solid fa-layer-group text-slate-400"></i> 전체 등록</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1"><span id="statTotal">0</span><span class="text-sm font-semibold text-slate-400 ml-0.5">건</span></p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-emerald-100 shadow-sm">
+        <p class="text-[11px] font-semibold text-emerald-600 flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> 지금 사용 가능</p>
+        <p class="text-2xl font-bold text-emerald-600 mt-1"><span id="statActive">0</span><span class="text-sm font-semibold text-emerald-300 ml-0.5">건</span></p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-orange-100 shadow-sm">
+        <p class="text-[11px] font-semibold text-orange-600 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> 만료 임박 (30일)</p>
+        <p class="text-2xl font-bold text-orange-600 mt-1"><span id="statSoon">0</span><span class="text-sm font-semibold text-orange-300 ml-0.5">건</span></p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-rose-100 shadow-sm">
+        <p class="text-[11px] font-semibold text-rose-600 flex items-center gap-1"><i class="fa-solid fa-ban"></i> 기간 만료</p>
+        <p class="text-2xl font-bold text-rose-600 mt-1"><span id="statExpired">0</span><span class="text-sm font-semibold text-rose-300 ml-0.5">건</span></p>
+      </div>
+      <div class="bg-white p-4 rounded-2xl border border-indigo-100 shadow-sm">
+        <p class="text-[11px] font-semibold text-indigo-600 flex items-center gap-1"><i class="fa-solid fa-infinity"></i> 기간 제한 없음</p>
+        <p class="text-2xl font-bold text-indigo-600 mt-1"><span id="statPerm">0</span><span class="text-sm font-semibold text-indigo-300 ml-0.5">건</span></p>
+      </div>
+    </section>
+
+    <!-- ==================== 필터 바 ==================== -->
+    <section class="bg-white p-4 rounded-2xl border border-yellow-100 shadow-sm space-y-3 no-print">
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative flex-1 min-w-[180px]">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+          <input type="text" id="fSearch" oninput="render()" placeholder="인플루언서 · 코멘트 · 파일 경로 검색"
+                 class="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400">
+        </div>
+        <select id="fBrand" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
+          <option value="">브랜드 전체</option><option>온살</option><option>루메아카이브</option>
+        </select>
+        <select id="fChannel" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
+          <option value="">채널 전체</option><option>유튜브</option><option>인스타그램</option>
+        </select>
+        <select id="fType" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
+          <option value="">유형 전체</option><option>PPL</option><option>브랜디드</option>
+        </select>
+        <select id="fState" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
+          <option value="">상태 전체</option>
+          <option value="active">사용 가능</option>
+          <option value="soon">만료 임박</option>
+          <option value="expired">만료</option>
+          <option value="before">시작 전</option>
+          <option value="perm">기간 제한 없음</option>
+        </select>
+        <select id="fScope" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
+          <option value="">활용 채널 전체</option>
+        </select>
+        <select id="fSort" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
+          <option value="endAsc">종료일 임박순</option>
+          <option value="uploadDesc">업로드 최신순</option>
+          <option value="nameAsc">이름순</option>
+        </select>
+
+        <div class="flex p-1 bg-yellow-50 rounded-xl border border-yellow-100 text-xs font-bold ml-auto">
+          <button onclick="setView('card')" id="view-card" class="px-3 py-1.5 rounded-lg bg-white text-yellow-700 shadow-xs"><i class="fa-solid fa-grip"></i> 카드</button>
+          <button onclick="setView('table')" id="view-table" class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800"><i class="fa-solid fa-table-list"></i> 표</button>
+        </div>
+        <button onclick="openForm()" class="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
+          <i class="fa-solid fa-plus"></i> 새 건 등록
+        </button>
+      </div>
+      <p class="text-[11px] text-slate-400"><span id="resultCount">0</span>건 표시 중 · 2차 활용 종료일은 <b>업로드일 기준</b>으로 자동 계산됩니다.</p>
+    </section>
+
+    <!-- ==================== 목록 ==================== -->
+    <section id="cardWrap" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></section>
+
+    <section id="tableWrap" class="hidden bg-white rounded-2xl border border-yellow-100 shadow-sm overflow-x-auto custom-scrollbar">
+      <table class="w-full text-xs whitespace-nowrap">
+        <thead class="bg-yellow-50/60 text-slate-600">
+          <tr>
+            <th class="px-3 py-2.5 text-left font-bold">인플루언서</th>
+            <th class="px-3 py-2.5 text-left font-bold">채널 / 유형</th>
+            <th class="px-3 py-2.5 text-left font-bold">초안 / 최종본</th>
+            <th class="px-3 py-2.5 text-left font-bold">업로드일</th>
+            <th class="px-3 py-2.5 text-left font-bold">2차 활용 기간</th>
+            <th class="px-3 py-2.5 text-left font-bold">상태</th>
+            <th class="px-3 py-2.5 text-left font-bold">활용 채널</th>
+            <th class="px-3 py-2.5 text-left font-bold">가공</th>
+            <th class="px-3 py-2.5 text-left font-bold">활용 범위</th>
+            <th class="px-3 py-2.5 text-left font-bold">소개 구간</th>
+            <th class="px-3 py-2.5 text-left font-bold">링크 / 원본</th>
+            <th class="px-3 py-2.5 text-left font-bold">관리</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </section>
+
+    <div id="emptyState" class="hidden bg-white p-12 rounded-2xl border border-dashed border-yellow-200 text-center">
+      <i class="fa-regular fa-folder-open text-4xl text-yellow-200"></i>
+      <p class="mt-3 text-sm font-bold text-slate-600">아직 등록된 2차 활용 건이 없습니다.</p>
+      <p class="mt-1 text-xs text-slate-400">기존 PPL 대시보드에서 불러오거나, 새 건을 직접 등록해 보세요.</p>
+      <div class="mt-4 flex justify-center gap-2">
+        <button onclick="openImportModal()" class="px-4 py-2 bg-yellow-100 text-yellow-800 text-xs font-bold rounded-xl">기존 대시보드에서 불러오기</button>
+        <button onclick="openForm()" class="px-4 py-2 bg-yellow-400 text-slate-900 text-xs font-bold rounded-xl">새 건 등록</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ==================== 등록 / 수정 모달 ==================== -->
+  <div id="formModal" class="hidden fixed inset-0 bg-slate-900/50 z-50 p-4 overflow-y-auto">
+    <div class="bg-white max-w-4xl mx-auto my-6 rounded-2xl shadow-xl p-6 space-y-5">
+      <div class="flex items-center justify-between border-b border-yellow-100 pb-3">
+        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-rotate-right text-yellow-500"></i> <span id="formTitle">2차 활용 건 등록</span>
+        </h3>
+        <button onclick="closeForm()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <!-- 기본 정보 -->
+      <div>
+        <p class="text-[11px] font-bold text-yellow-700 mb-2">기본 정보</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">브랜드</label>
+            <select id="fmBrand" class="w-full px-3 py-2 text-xs border border-yellow-200 rounded-xl font-bold text-yellow-700 bg-yellow-50/30">
+              <option>온살</option><option>루메아카이브</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">인플루언서 이름 <span class="text-rose-400">*</span></label>
+            <input type="text" id="fmName" placeholder="예: 김민지" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">계정 / 채널명</label>
+            <input type="text" id="fmAccount" placeholder="예: @pink_life" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">진행 제품</label>
+            <input type="text" id="fmProduct" placeholder="예: 하이퍼 히알루론 세럼" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+        </div>
+      </div>
+
+      <!-- 채널 / 유형 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[11px] font-bold text-yellow-700 mb-2">업로드 채널 (복수 선택)</label>
+          <div id="fmChannels" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-yellow-700 mb-2">콘텐츠 유형</label>
+          <div id="fmTypes" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+
+      <!-- 일정 -->
+      <div>
+        <p class="text-[11px] font-bold text-yellow-700 mb-2">진행 일정</p>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">초안 전달</label>
+            <input type="date" id="fmDraft" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">최종본 전달</label>
+            <input type="date" id="fmFinal" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">업로드 일정 <span class="text-rose-400">*</span></label>
+            <input type="date" id="fmUpload" onchange="updatePeriodPreview()" class="w-full px-3 py-2 text-xs border border-yellow-200 rounded-xl bg-yellow-50/30 font-semibold text-yellow-800">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2차 활용 기간 -->
+      <div class="bg-yellow-50 border-2 border-yellow-400 rounded-2xl p-4 space-y-3">
+        <p class="text-[11px] font-bold text-yellow-700 flex items-center gap-1.5"><i class="fa-solid fa-calendar-days"></i> 2차 활용 기간</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">기산일 (기본: 업로드일)</label>
+            <input type="date" id="fmStart" onchange="updatePeriodPreview()" class="w-full px-3 py-2 text-xs border border-yellow-200 rounded-xl">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">활용 개월 수</label>
+            <select id="fmMonths" onchange="updatePeriodPreview()" class="w-full px-3 py-2 text-xs border border-yellow-200 rounded-xl font-bold text-yellow-700 bg-white">
+              <option value="1">1개월</option><option value="2">2개월</option><option value="3">3개월</option>
+              <option value="6" selected>6개월</option><option value="9">9개월</option><option value="12">12개월 (1년)</option>
+              <option value="18">18개월</option><option value="24">24개월 (2년)</option><option value="36">36개월 (3년)</option>
+              <option value="perm">기간 제한 없음</option>
+            </select>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">자동 계산 결과</label>
+            <div id="periodPreview" class="w-full px-3 py-2 text-xs border border-yellow-200 rounded-xl bg-white font-bold text-slate-700">업로드일을 선택하면 표시됩니다.</div>
+          </div>
+        </div>
+        <p class="text-[10px] text-yellow-600/80">* 기산일 당일을 포함해 계산합니다. (예: 3/1 업로드 + 6개월 → 3/1 ~ 8/31)</p>
+      </div>
+
+      <!-- 2차 활용 범위 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[11px] font-bold text-yellow-700 mb-2">활용 가능 채널 (복수 선택)</label>
+          <div id="fmScopeChannels" class="flex flex-wrap gap-2 mb-2"></div>
+          <div class="flex gap-1.5">
+            <input type="text" id="fmNewScopeChannel" placeholder="채널 직접 추가 (예: 올리브영)" class="flex-1 px-3 py-1.5 text-[11px] border border-slate-200 rounded-xl">
+            <button onclick="addOption('scopeChannels')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-xl">추가</button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-yellow-700 mb-2">활용 가능 범위 (복수 선택)</label>
+          <div id="fmUsageRights" class="flex flex-wrap gap-2 mb-2"></div>
+          <div class="flex gap-1.5">
+            <input type="text" id="fmNewUsageRight" placeholder="범위 직접 추가 (예: 옥외광고)" class="flex-1 px-3 py-1.5 text-[11px] border border-slate-200 rounded-xl">
+            <button onclick="addOption('usageRights')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-xl">추가</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 가공 여부 + 소개 구간 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[11px] font-bold text-yellow-700 mb-2">2차 가공 (편집·재구성) 여부</label>
+          <div id="fmEdit" class="flex flex-wrap gap-2"></div>
+          <input type="text" id="fmEditNote" placeholder="가공 관련 조건 메모 (예: 자막 추가만 가능)" class="w-full mt-2 px-3 py-2 text-xs border border-slate-200 rounded-xl">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[11px] font-bold text-yellow-700">제품 소개 구간 <span class="font-normal text-slate-400">(mm:ss)</span></label>
+            <button onclick="addClipRow()" class="px-2.5 py-1 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-[11px] font-bold rounded-lg shadow-xs">구간 추가</button>
+          </div>
+          <div id="fmClips" class="space-y-2"></div>
+          <p class="text-[11px] font-bold text-slate-600 mt-2">총 노출 길이: <span id="clipTotal" class="text-yellow-700">0초</span></p>
+        </div>
+      </div>
+
+      <!-- 코멘트 / 경로 / URL -->
+      <div class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 mb-1">2차 활용 코멘트 (어느 부분을 쓰면 좋을지)</label>
+          <textarea id="fmComment" rows="3" placeholder="예: 0:15~0:22 텍스처 클로즈업 컷이 상세페이지 상단용으로 좋음. 발림성 언급 멘트 함께 사용 추천."
+                    class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl custom-scrollbar"></textarea>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">원본 파일 경로 / 링크</label>
+            <input type="text" id="fmFilePath" placeholder="구글드라이브 링크 또는 사내 경로" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">업로드 URL</label>
+            <input type="text" id="fmUploadUrl" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center gap-2 pt-3 border-t border-slate-100">
+        <button id="fmDeleteBtn" onclick="deleteFromForm()" class="hidden px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl">삭제</button>
+        <div class="flex gap-2 ml-auto">
+          <button onclick="closeForm()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl">취소</button>
+          <button onclick="saveForm()" class="px-5 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs">저장하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 불러오기 모달 ==================== -->
+  <div id="importModal" class="hidden fixed inset-0 bg-slate-900/50 z-50 p-4 overflow-y-auto">
+    <div class="bg-white max-w-3xl mx-auto my-6 rounded-2xl shadow-xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-yellow-100 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-download text-yellow-600"></i> 기존 PPL 대시보드에서 불러오기</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">인플루언서 이름 · 초안전달 · 최종본전달 · 업로드일정 · 채널 · 유형을 그대로 가져옵니다.</p>
+        </div>
+        <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="loadSourceList()" class="px-3 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs"><i class="fa-solid fa-rotate"></i> 목록 새로고침</button>
+        <label class="chip flex items-center gap-1.5 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-xl text-xs font-semibold text-yellow-700">
+          <input type="checkbox" id="impOnlyReuse" onchange="renderSourceList()" checked>
+          <i class="fa-solid fa-square-check" id="impOnlyReuseIcon"></i> 2차활용 계약건만 보기
+        </label>
+        <input type="text" id="impSearch" oninput="renderSourceList()" placeholder="이름 검색" class="flex-1 min-w-[140px] px-3 py-2 text-xs border border-slate-200 rounded-xl">
+        <span id="impStatus" class="text-[11px] text-slate-400"></span>
+      </div>
+
+      <div id="impList" class="max-h-[50vh] overflow-y-auto custom-scrollbar space-y-2 border border-slate-100 rounded-xl p-2"></div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+        <button onclick="closeImportModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl">취소</button>
+        <button onclick="doImport()" class="px-5 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs">선택한 건 가져오기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 설정 모달 ==================== -->
+  <div id="settingsModal" class="hidden fixed inset-0 bg-slate-900/50 z-50 p-4 overflow-y-auto">
+    <div class="bg-white max-w-2xl mx-auto my-10 rounded-2xl shadow-xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-yellow-100 pb-3">
+        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-gear text-slate-500"></i> 구글 시트 동기화 설정</h3>
+        <button onclick="closeSettings()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <p class="text-[11px] text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl">
+        기존 대시보드와 <b>같은 Apps Script 주소</b>를 쓰되 저장 키만 다르게 두면, 한 스프레드시트 안에서 데이터가 분리 저장됩니다.
+        어느 기기·브라우저에서 열어도 같은 내용이 보입니다.
+      </p>
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 mb-1">Apps Script 웹앱 주소 (저장용)</label>
+        <input type="text" id="setSyncUrl" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 mb-1">이 대시보드 저장 키</label>
+          <input type="text" id="setSyncKey" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 mb-1">불러오기용 기존 대시보드 키</label>
+          <input type="text" id="setSourceKey" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl">
+        </div>
+      </div>
+      <div class="flex justify-between items-center pt-3 border-t border-slate-100">
+        <button onclick="exportBackup()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl"><i class="fa-solid fa-floppy-disk"></i> 백업 파일 내려받기</button>
+        <div class="flex gap-2">
+          <button onclick="closeSettings()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl">취소</button>
+          <button onclick="saveSettings()" class="px-5 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs">저장 후 다시 연결</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-2xl text-xs font-bold shadow-lg"></div>
+
+<script>
+/* ==========================================================================
+   1. 설정 & 상태
+   ========================================================================== */
+const DEFAULTS = {
+  syncUrl: 'https://script.google.com/macros/s/AKfycbzLKUEHFm36G4wP4Lw2Tw4pFeFufbI0zcTEJ298kDT-gvLRpafpaYGlH24uMD3PDikVqA/exec',
+  syncKey: 'khj327_reuse',
+  sourceKey: 'khj327'
+};
+let CFG = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('reuse_cfg') || '{}'));
+
+const BASE_CHANNELS      = ['유튜브', '인스타그램'];
+const BASE_TYPES         = ['PPL', '브랜디드'];
+const BASE_EDIT          = ['가공 가능', '가공 불가', '부분 가능(협의)'];
+const BASE_SCOPE         = ['자사몰', '스스(스마트스토어)', '무신사', '쿠팡', '메타'];
+const BASE_RIGHTS        = ['상세페이지', '썸네일', '광고 소재', 'SNS 게시', '성명권', '초상권', '2차 편집본', '오프라인 인쇄물'];
+
+let records   = JSON.parse(localStorage.getItem('reuse_records')  || '[]');
+let optScope  = JSON.parse(localStorage.getItem('reuse_optScope') || 'null')  || BASE_SCOPE.slice();
+let optRights = JSON.parse(localStorage.getItem('reuse_optRights')|| 'null')  || BASE_RIGHTS.slice();
+
+let viewMode  = localStorage.getItem('reuse_view') || 'card';
+let editingId = null;
+let sourceList = [];
+let impChecked = new Set();
+
+const sel = { channels: new Set(), types: new Set(), scope: new Set(), rights: new Set(), edit: '' };
+
+/* ==========================================================================
+   2. 공통 유틸
+   ========================================================================== */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const uid = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+function toast(msg, type) {
+  const t = $('toast');
+  const styles = {
+    ok:   'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-2xl text-xs font-bold shadow-lg bg-emerald-500 text-white',
+    err:  'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-2xl text-xs font-bold shadow-lg bg-rose-500 text-white',
+    info: 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-2xl text-xs font-bold shadow-lg bg-slate-800 text-white'
+  };
+  t.className = styles[type] || styles.info;
+  t.innerText = msg;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.add('hidden'), 2600);
+}
+
+function parseDate(s) { return s ? new Date(s + 'T00:00:00') : null; }
+function fmtDate(d) {
+  if (!d) return '';
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function todayD() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+
+function addMonths(date, n) {
+  const dt = new Date(date.getTime());
+  const day = dt.getDate();
+  dt.setDate(1);
+  dt.setMonth(dt.getMonth() + n);
+  const last = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
+  dt.setDate(Math.min(day, last));
+  return dt;
+}
+
+function calcPeriod(startStr, months) {
+  const s = parseDate(startStr);
+  if (!s) return null;
+  if (months === 'perm') return { start: s, end: null, perm: true };
+  const e = addMonths(s, Number(months) || 0);
+  e.setDate(e.getDate() - 1);
+  return { start: s, end: e, perm: false };
+}
+
+function periodOf(r) { return calcPeriod(r.reuseStart || r.uploadDate, r.reuseMonths); }
+
+function statusOf(r) {
+  const p = periodOf(r);
+  if (!p) return { state: 'none', label: '기간 미입력', cls: 'bg-slate-100 text-slate-500 border-slate-200', days: null };
+  if (p.perm) return { state: 'perm', label: '기간 제한 없음', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200', days: null };
+  const today = todayD();
+  if (today < p.start) {
+    const d = Math.ceil((p.start - today) / 864e5);
+    return { state: 'before', label: '시작 ' + d + '일 전', cls: 'bg-sky-100 text-sky-700 border-sky-200', days: d };
+  }
+  const days = Math.floor((p.end - today) / 864e5);
+  if (days < 0)   return { state: 'expired', label: '만료 (' + (-days) + '일 경과)', cls: 'bg-rose-100 text-rose-700 border-rose-200', days };
+  if (days <= 30) return { state: 'soon',    label: 'D-' + days + ' 만료 임박',      cls: 'bg-orange-100 text-orange-700 border-orange-200', days };
+  return            { state: 'active',  label: 'D-' + days + ' 사용 가능',     cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', days };
+}
+
+function periodText(r) {
+  const p = periodOf(r);
+  if (!p) return '—';
+  if (p.perm) return fmtDate(p.start) + ' ~ 제한 없음';
+  return fmtDate(p.start) + ' ~ ' + fmtDate(p.end);
+}
+
+function secToMMSS(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+}
+function mmssToSec(v) {
+  if (!v) return null;
+  v = String(v).trim();
+  if (/^\d+$/.test(v)) return Number(v);
+  const m = v.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+function clipTotal(r) {
+  return (r.clips || []).reduce((sum, c) => {
+    const a = mmssToSec(c.start), b = mmssToSec(c.end);
+    return (a != null && b != null && b > a) ? sum + (b - a) : sum;
+  }, 0);
+}
+
+/* ==========================================================================
+   3. 저장 & 구글시트 동기화
+   ========================================================================== */
+let syncReady = false, syncTimer = null;
+
+function saveLocal() {
+  localStorage.setItem('reuse_records', JSON.stringify(records));
+  localStorage.setItem('reuse_optScope', JSON.stringify(optScope));
+  localStorage.setItem('reuse_optRights', JSON.stringify(optRights));
+}
+function saveAll() { saveLocal(); queueSync(); }
+
+function setSyncStatus(state, text) {
+  const btn = $('syncStatus'), label = $('syncStatusText');
+  const styles = {
+    ok:     'px-3 py-2 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-xl transition flex items-center gap-1.5',
+    saving: 'px-3 py-2 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded-xl transition flex items-center gap-1.5',
+    error:  'px-3 py-2 bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl transition flex items-center gap-1.5',
+    idle:   'px-3 py-2 bg-slate-100 text-slate-500 text-xs font-semibold rounded-xl transition flex items-center gap-1.5'
+  };
+  btn.className = styles[state] || styles.idle;
+  label.innerText = text;
+}
+
+async function pullFromSheet() {
+  setSyncStatus('saving', '불러오는 중...');
+  try {
+    const res = await fetch(CFG.syncUrl + '?key=' + encodeURIComponent(CFG.syncKey) + '&t=' + Date.now());
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'load failed');
+    const d = json.data || {};
+
+    // 안전장치: 기존 PPL 대시보드 저장소와 충돌하면 절대 덮어쓰지 않는다
+    if (d.onsal_pplList || d.onsal_products) {
+      syncReady = false;
+      setSyncStatus('error', '저장소 충돌 — 저장 중지됨');
+      $('syncWarning').classList.remove('hidden');
+      $('syncWarning').innerText = '이 저장 키가 기존 PPL 대시보드 데이터와 같은 칸을 가리키고 있어 자동 저장을 멈췄습니다. 설정에서 저장 키를 다른 값으로 바꿔 주세요.';
+      return false;
+    }
+    $('syncWarning').classList.add('hidden');
+
+    const hasRemote = Object.keys(d).length > 0;
+    if (hasRemote) {
+      if (Array.isArray(d.reuse_records))   records   = d.reuse_records;
+      if (Array.isArray(d.reuse_optScope))  optScope  = d.reuse_optScope;
+      if (Array.isArray(d.reuse_optRights)) optRights = d.reuse_optRights;
+      saveLocal();
+    }
+    syncReady = true;
+    setSyncStatus('ok', hasRemote ? '시트 연결됨' : '시트 연결됨 (첫 저장 대기)');
+    if (!hasRemote) queueSync();
+    return true;
+  } catch (e) {
+    syncReady = false;
+    setSyncStatus('error', '시트 연결 실패 (클릭해서 재시도)');
+    return false;
+  }
+}
+
+async function pushToSheet() {
+  if (!syncReady) return;
+  setSyncStatus('saving', '저장 중...');
+  const size = JSON.stringify(records).length;
+  if (size > 40000) toast('데이터가 커지고 있습니다(' + Math.round(size / 1000) + 'KB). 백업 파일을 한 번 내려받아 두세요.', 'info');
+  try {
+    const res = await fetch(CFG.syncUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        key: CFG.syncKey,
+        data: { reuse_records: records, reuse_optScope: optScope, reuse_optRights: optRights }
+      })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'save failed');
+    const t = new Date();
+    setSyncStatus('ok', '저장됨 ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'));
+  } catch (e) {
+    setSyncStatus('error', '저장 실패 (다시 시도하려면 클릭)');
+  }
+}
+
+function queueSync() {
+  if (!syncReady) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushToSheet, 1200);
+}
+
+async function syncNow() {
+  await pullFromSheet();
+  render();
+  await pushToSheet();
+}
+
+/* ==========================================================================
+   4. 설정 모달
+   ========================================================================== */
+function openSettings() {
+  $('setSyncUrl').value = CFG.syncUrl;
+  $('setSyncKey').value = CFG.syncKey;
+  $('setSourceKey').value = CFG.sourceKey;
+  $('settingsModal').classList.remove('hidden');
+}
+function closeSettings() { $('settingsModal').classList.add('hidden'); }
+async function saveSettings() {
+  CFG.syncUrl   = $('setSyncUrl').value.trim() || DEFAULTS.syncUrl;
+  CFG.syncKey   = $('setSyncKey').value.trim() || DEFAULTS.syncKey;
+  CFG.sourceKey = $('setSourceKey').value.trim() || DEFAULTS.sourceKey;
+  localStorage.setItem('reuse_cfg', JSON.stringify(CFG));
+  closeSettings();
+  await pullFromSheet();
+  render();
+  toast('설정을 저장했습니다.', 'ok');
+}
+function exportBackup() {
+  const blob = new Blob([JSON.stringify({ reuse_records: records, reuse_optScope: optScope, reuse_optRights: optRights }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '2차활용_백업_' + fmtDate(new Date()) + '.json';
+  a.click();
+}
+
+/* ==========================================================================
+   5. 렌더링
+   ========================================================================== */
+function setView(v) {
+  viewMode = v;
+  localStorage.setItem('reuse_view', v);
+  const on  = 'px-3 py-1.5 rounded-lg bg-white text-yellow-700 shadow-xs';
+  const off = 'px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800';
+  $('view-card').className  = v === 'card'  ? on : off;
+  $('view-table').className = v === 'table' ? on : off;
+  render();
+}
+
+function filtered() {
+  const q     = $('fSearch').value.trim().toLowerCase();
+  const brand = $('fBrand').value, ch = $('fChannel').value, tp = $('fType').value;
+  const st    = $('fState').value, sc = $('fScope').value, sort = $('fSort').value;
+
+  let list = records.filter(r => {
+    if (brand && r.brand !== brand) return false;
+    if (ch && !(r.channels || []).includes(ch)) return false;
+    if (tp && !(r.types || []).includes(tp)) return false;
+    if (sc && !(r.scopeChannels || []).includes(sc)) return false;
+    if (st && statusOf(r).state !== st) return false;
+    if (q) {
+      const hay = [r.name, r.account, r.product, r.comment, r.filePath, r.uploadUrl, (r.usageRights || []).join(' ')].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const endTime = r => { const p = periodOf(r); return (!p || p.perm || !p.end) ? Infinity : p.end.getTime(); };
+  if (sort === 'endAsc')      list.sort((a, b) => endTime(a) - endTime(b));
+  if (sort === 'uploadDesc')  list.sort((a, b) => String(b.uploadDate || '').localeCompare(String(a.uploadDate || '')));
+  if (sort === 'nameAsc')     list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+  return list;
+}
+
+function renderStats() {
+  const c = { active: 0, soon: 0, expired: 0, perm: 0 };
+  records.forEach(r => { const s = statusOf(r).state; if (c[s] != null) c[s]++; });
+  $('statTotal').innerText   = records.length;
+  $('statActive').innerText  = c.active;
+  $('statSoon').innerText    = c.soon;
+  $('statExpired').innerText = c.expired;
+  $('statPerm').innerText    = c.perm;
+}
+
+function renderScopeFilter() {
+  const s = $('fScope'), cur = s.value;
+  s.innerHTML = '<option value="">활용 채널 전체</option>' + optScope.map(o => '<option>' + esc(o) + '</option>').join('');
+  s.value = cur;
+}
+
+const tagPill = (t, cls) => '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + cls + '">' + esc(t) + '</span>';
+
+function channelPill(c) {
+  return c === '유튜브'
+    ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700"><i class="fa-brands fa-youtube"></i> 유튜브</span>'
+    : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700"><i class="fa-brands fa-instagram"></i> ' + esc(c) + '</span>';
+}
+function typePill(t) {
+  return tagPill(t, t === 'PPL' ? 'bg-yellow-100 text-yellow-800' : 'bg-violet-100 text-violet-700');
+}
+function editPill(e) {
+  if (!e) return '';
+  const cls = e === '가공 가능' ? 'bg-emerald-100 text-emerald-700' : e === '가공 불가' ? 'bg-rose-100 text-rose-700' : 'bg-orange-100 text-orange-700';
+  return tagPill(e, cls);
+}
+function linkBtn(url, icon, label) {
+  if (!url) return '';
+  const href = /^https?:\/\//i.test(url) ? url : null;
+  if (!href) return '<span class="text-[10px] text-slate-500 bg-slate-100 px-2 py-1 rounded-lg" title="' + esc(url) + '"><i class="fa-solid ' + icon + '"></i> ' + label + '</span>';
+  return '<a href="' + esc(href) + '" target="_blank" rel="noopener" class="text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg"><i class="fa-solid ' + icon + '"></i> ' + label + '</a>';
+}
+
+function cardHtml(r) {
+  const s = statusOf(r);
+  const total = clipTotal(r);
+  const clipsTxt = (r.clips || []).filter(c => c.start || c.end).map(c => esc(c.start || '?') + '~' + esc(c.end || '?')).join(', ');
+
+  return '' +
+  '<div class="bg-white rounded-2xl border border-yellow-100 shadow-sm p-5 space-y-3 hover:shadow-md transition">' +
+    '<div class="flex items-start justify-between gap-3">' +
+      '<div class="min-w-0">' +
+        '<div class="flex items-center flex-wrap gap-1.5">' +
+          tagPill(r.brand || '온살', r.brand === '루메아카이브' ? 'bg-skyblue-100 text-skyblue-700' : 'bg-yellow-100 text-yellow-800') +
+          '<h3 class="text-sm font-bold text-slate-900 truncate">' + esc(r.name || '이름 미입력') + '</h3>' +
+          (r.account ? '<span class="text-[11px] text-slate-400 truncate">' + esc(r.account) + '</span>' : '') +
+        '</div>' +
+        '<div class="flex flex-wrap gap-1 mt-1.5">' +
+          (r.channels || []).map(channelPill).join('') + (r.types || []).map(typePill).join('') +
+          (r.product ? tagPill(r.product, 'bg-slate-100 text-slate-600') : '') +
+        '</div>' +
+      '</div>' +
+      '<span class="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-xl border ' + s.cls + '">' + esc(s.label) + '</span>' +
+    '</div>' +
+
+    '<div class="grid grid-cols-3 gap-2 text-center bg-slate-50 rounded-xl py-2">' +
+      '<div><p class="text-[10px] text-slate-400 font-semibold">초안 전달</p><p class="text-[11px] font-bold text-slate-700">' + (r.draftDate || '—') + '</p></div>' +
+      '<div><p class="text-[10px] text-slate-400 font-semibold">최종본 전달</p><p class="text-[11px] font-bold text-slate-700">' + (r.finalDate || '—') + '</p></div>' +
+      '<div><p class="text-[10px] text-slate-400 font-semibold">업로드</p><p class="text-[11px] font-bold text-yellow-700">' + (r.uploadDate || '—') + '</p></div>' +
+    '</div>' +
+
+    '<div class="bg-white border-2 border-yellow-400 rounded-xl px-3 py-2 flex items-center justify-between gap-2">' +
+      '<div><p class="text-[10px] font-bold text-yellow-700">2차 활용 기간' + (r.reuseMonths === 'perm' ? '' : ' (' + esc(r.reuseMonths || '') + '개월)') + '</p>' +
+      '<p class="text-xs font-bold text-slate-800">' + periodText(r) + '</p></div>' +
+      (total ? '<div class="text-right"><p class="text-[10px] font-bold text-yellow-700">제품 노출</p><p class="text-xs font-bold text-slate-800">' + total + '초</p></div>' : '') +
+    '</div>' +
+
+    '<div class="space-y-1.5">' +
+      '<div class="flex items-start gap-2"><span class="text-[10px] font-bold text-slate-400 w-16 shrink-0 pt-0.5">활용 채널</span>' +
+        '<div class="flex flex-wrap gap-1">' + ((r.scopeChannels || []).length ? (r.scopeChannels || []).map(c => tagPill(c, 'bg-emerald-50 text-emerald-700 border border-emerald-100')).join('') : '<span class="text-[11px] text-slate-300">미지정</span>') + '</div></div>' +
+      '<div class="flex items-start gap-2"><span class="text-[10px] font-bold text-slate-400 w-16 shrink-0 pt-0.5">활용 범위</span>' +
+        '<div class="flex flex-wrap gap-1">' + ((r.usageRights || []).length ? (r.usageRights || []).map(c => tagPill(c, 'bg-sky-50 text-sky-700 border border-sky-100')).join('') : '<span class="text-[11px] text-slate-300">미지정</span>') + '</div></div>' +
+      '<div class="flex items-start gap-2"><span class="text-[10px] font-bold text-slate-400 w-16 shrink-0 pt-0.5">2차 가공</span>' +
+        '<div class="flex flex-wrap gap-1 items-center">' + (editPill(r.editAllowed) || '<span class="text-[11px] text-slate-300">미지정</span>') +
+        (r.editNote ? '<span class="text-[11px] text-slate-500">' + esc(r.editNote) + '</span>' : '') + '</div></div>' +
+      (clipsTxt ? '<div class="flex items-start gap-2"><span class="text-[10px] font-bold text-slate-400 w-16 shrink-0 pt-0.5">소개 구간</span><span class="text-[11px] font-semibold text-slate-700">' + clipsTxt + '</span></div>' : '') +
+    '</div>' +
+
+    (r.comment ? '<div class="bg-yellow-50/60 border border-yellow-100 rounded-xl px-3 py-2"><p class="text-[10px] font-bold text-yellow-700 mb-0.5"><i class="fa-solid fa-lightbulb"></i> 활용 코멘트</p><p class="text-[11px] text-slate-700 whitespace-pre-wrap leading-relaxed">' + esc(r.comment) + '</p></div>' : '') +
+
+    '<div class="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">' +
+      linkBtn(r.uploadUrl, 'fa-link', '업로드 게시물') +
+      linkBtn(r.filePath, 'fa-folder-open', '원본 파일') +
+      '<div class="ml-auto flex gap-1.5">' +
+        '<button onclick="openForm(\'' + r.id + '\')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-lg"><i class="fa-solid fa-pen"></i> 수정</button>' +
+        '<button onclick="removeRecord(\'' + r.id + '\')" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold rounded-lg"><i class="fa-solid fa-trash"></i></button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function rowHtml(r) {
+  const s = statusOf(r);
+  const total = clipTotal(r);
+  const clipsTxt = (r.clips || []).filter(c => c.start || c.end).map(c => esc(c.start || '?') + '~' + esc(c.end || '?')).join(', ');
+  return '<tr class="hover:bg-yellow-50/30">' +
+    '<td class="px-3 py-2.5"><p class="font-bold text-slate-800">' + esc(r.name || '—') + '</p><p class="text-[10px] text-slate-400">' + esc(r.account || '') + '</p></td>' +
+    '<td class="px-3 py-2.5"><div class="flex flex-wrap gap-1">' + (r.channels || []).map(channelPill).join('') + (r.types || []).map(typePill).join('') + '</div></td>' +
+    '<td class="px-3 py-2.5 text-slate-600">' + (r.draftDate || '—') + '<br>' + (r.finalDate || '—') + '</td>' +
+    '<td class="px-3 py-2.5 font-bold text-yellow-700">' + (r.uploadDate || '—') + '</td>' +
+    '<td class="px-3 py-2.5 font-semibold text-slate-700">' + periodText(r) + '</td>' +
+    '<td class="px-3 py-2.5"><span class="text-[10px] font-bold px-2 py-1 rounded-lg border ' + s.cls + '">' + esc(s.label) + '</span></td>' +
+    '<td class="px-3 py-2.5"><div class="flex flex-wrap gap-1 max-w-[200px] whitespace-normal">' + (r.scopeChannels || []).map(c => tagPill(c, 'bg-emerald-50 text-emerald-700')).join('') + '</div></td>' +
+    '<td class="px-3 py-2.5">' + (editPill(r.editAllowed) || '—') + '</td>' +
+    '<td class="px-3 py-2.5"><div class="flex flex-wrap gap-1 max-w-[200px] whitespace-normal">' + (r.usageRights || []).map(c => tagPill(c, 'bg-sky-50 text-sky-700')).join('') + '</div></td>' +
+    '<td class="px-3 py-2.5 text-slate-600">' + (clipsTxt || '—') + (total ? '<br><b class="text-yellow-700">' + total + '초</b>' : '') + '</td>' +
+    '<td class="px-3 py-2.5"><div class="flex gap-1">' + (linkBtn(r.uploadUrl, 'fa-link', 'URL') || '') + (linkBtn(r.filePath, 'fa-folder-open', '원본') || '') + '</div></td>' +
+    '<td class="px-3 py-2.5"><div class="flex gap-1">' +
+      '<button onclick="openForm(\'' + r.id + '\')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg"><i class="fa-solid fa-pen"></i></button>' +
+      '<button onclick="removeRecord(\'' + r.id + '\')" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg"><i class="fa-solid fa-trash"></i></button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+function render() {
+  renderStats();
+  renderScopeFilter();
+  const list = filtered();
+  $('resultCount').innerText = list.length;
+
+  const showEmpty = records.length === 0;
+  $('emptyState').classList.toggle('hidden', !showEmpty);
+  $('cardWrap').classList.toggle('hidden', showEmpty || viewMode !== 'card');
+  $('tableWrap').classList.toggle('hidden', showEmpty || viewMode !== 'table');
+
+  if (viewMode === 'card') {
+    $('cardWrap').innerHTML = list.length ? list.map(cardHtml).join('')
+      : '<div class="lg:col-span-2 bg-white p-10 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400">조건에 맞는 건이 없습니다.</div>';
+  } else {
+    $('tableBody').innerHTML = list.length ? list.map(rowHtml).join('')
+      : '<tr><td colspan="12" class="px-3 py-10 text-center text-xs text-slate-400">조건에 맞는 건이 없습니다.</td></tr>';
+  }
+}
+
+function removeRecord(id) {
+  const r = records.find(x => x.id === id);
+  if (!confirm((r && r.name ? r.name + ' ' : '') + '건을 삭제할까요?')) return;
+  records = records.filter(x => x.id !== id);
+  saveAll(); render();
+  toast('삭제했습니다.', 'info');
+}
+
+/* ==========================================================================
+   6. 등록 / 수정 폼
+   ========================================================================== */
+function chipBtn(group, val, active, activeCls) {
+  const base = 'chip px-3 py-1.5 text-[11px] font-bold rounded-xl border transition ';
+  const off  = 'bg-white text-slate-500 border-slate-200 hover:border-slate-300';
+  return '<button type="button" onclick="toggleChip(\'' + group + '\',\'' + val.replace(/'/g, "\\'") + '\')" class="' + base + (active ? activeCls : off) + '">' + esc(val) + '</button>';
+}
+
+function renderChips() {
+  $('fmChannels').innerHTML   = BASE_CHANNELS.map(v => chipBtn('channels', v, sel.channels.has(v), 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
+  $('fmTypes').innerHTML      = BASE_TYPES.map(v => chipBtn('types', v, sel.types.has(v), 'bg-violet-500 text-white border-violet-500 shadow-xs')).join('');
+  $('fmEdit').innerHTML       = BASE_EDIT.map(v => chipBtn('edit', v, sel.edit === v, 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
+  $('fmScopeChannels').innerHTML = optScope.map(v => chipBtn('scope', v, sel.scope.has(v), 'bg-emerald-500 text-white border-emerald-500 shadow-xs')).join('');
+  $('fmUsageRights').innerHTML   = optRights.map(v => chipBtn('rights', v, sel.rights.has(v), 'bg-sky-500 text-white border-sky-500 shadow-xs')).join('');
+}
+
+function toggleChip(group, val) {
+  if (group === 'edit') { sel.edit = (sel.edit === val) ? '' : val; }
+  else { const s = sel[group]; s.has(val) ? s.delete(val) : s.add(val); }
+  renderChips();
+}
+
+function addOption(kind) {
+  const inputId = kind === 'scopeChannels' ? 'fmNewScopeChannel' : 'fmNewUsageRight';
+  const v = $(inputId).value.trim().replace(/["'\\<>]/g, '');
+  if (!v) return;
+  const arr = kind === 'scopeChannels' ? optScope : optRights;
+  if (!arr.includes(v)) arr.push(v);
+  (kind === 'scopeChannels' ? sel.scope : sel.rights).add(v);
+  $(inputId).value = '';
+  saveAll(); renderChips(); renderScopeFilter();
+}
+
+function clipRowHtml(c) {
+  c = c || { start: '', end: '' };
+  return '<div class="clip-row flex items-center gap-1.5">' +
+    '<input type="text" value="' + esc(c.start) + '" oninput="updateClipTotal()" placeholder="0:12" class="clip-start w-20 px-2.5 py-1.5 text-[11px] border border-slate-200 rounded-lg text-center">' +
+    '<span class="text-slate-400 text-[11px]">~</span>' +
+    '<input type="text" value="' + esc(c.end) + '" oninput="updateClipTotal()" placeholder="0:35" class="clip-end w-20 px-2.5 py-1.5 text-[11px] border border-slate-200 rounded-lg text-center">' +
+    '<span class="clip-len text-[11px] font-bold text-slate-500 w-12"></span>' +
+    '<button type="button" onclick="this.closest(\'.clip-row\').remove(); updateClipTotal();" class="px-2 py-1 text-rose-400 hover:text-rose-600"><i class="fa-solid fa-xmark"></i></button>' +
+  '</div>';
+}
+function addClipRow(c) { $('fmClips').insertAdjacentHTML('beforeend', clipRowHtml(c)); updateClipTotal(); }
+
+function readClips() {
+  return Array.from(document.querySelectorAll('#fmClips .clip-row')).map(row => ({
+    start: row.querySelector('.clip-start').value.trim(),
+    end:   row.querySelector('.clip-end').value.trim()
+  })).filter(c => c.start || c.end);
+}
+function updateClipTotal() {
+  let total = 0;
+  document.querySelectorAll('#fmClips .clip-row').forEach(row => {
+    const a = mmssToSec(row.querySelector('.clip-start').value);
+    const b = mmssToSec(row.querySelector('.clip-end').value);
+    const len = (a != null && b != null && b > a) ? b - a : null;
+    row.querySelector('.clip-len').innerText = len != null ? len + '초' : '';
+    if (len) total += len;
+  });
+  $('clipTotal').innerText = total + '초';
+}
+
+function updatePeriodPreview() {
+  const start = $('fmStart').value || $('fmUpload').value;
+  const months = $('fmMonths').value;
+  if (!start) { $('periodPreview').innerHTML = '<span class="text-slate-400 font-normal">업로드일을 선택하면 표시됩니다.</span>'; return; }
+  const p = calcPeriod(start, months);
+  if (p.perm) { $('periodPreview').innerHTML = fmtDate(p.start) + ' 부터 <span class="text-indigo-600">기간 제한 없음</span>'; return; }
+  const days = Math.floor((p.end - todayD()) / 864e5);
+  const tail = days < 0 ? '<span class="text-rose-500">만료됨</span>'
+             : days <= 30 ? '<span class="text-orange-600">D-' + days + '</span>'
+             : '<span class="text-emerald-600">D-' + days + '</span>';
+  $('periodPreview').innerHTML = fmtDate(p.start) + ' ~ ' + fmtDate(p.end) + ' &nbsp;·&nbsp; ' + tail;
+}
+
+function openForm(id) {
+  editingId = id || null;
+  const r = id ? records.find(x => x.id === id) : null;
+
+  $('formTitle').innerText = r ? '2차 활용 건 수정' : '2차 활용 건 등록';
+  $('fmDeleteBtn').classList.toggle('hidden', !r);
+
+  $('fmBrand').value      = (r && r.brand) || '온살';
+  $('fmName').value       = (r && r.name) || '';
+  $('fmAccount').value    = (r && r.account) || '';
+  $('fmProduct').value    = (r && r.product) || '';
+  $('fmDraft').value      = (r && r.draftDate) || '';
+  $('fmFinal').value      = (r && r.finalDate) || '';
+  $('fmUpload').value     = (r && r.uploadDate) || '';
+  $('fmStart').value      = (r && r.reuseStart) || '';
+  $('fmMonths').value     = (r && r.reuseMonths != null) ? String(r.reuseMonths) : '6';
+  $('fmEditNote').value   = (r && r.editNote) || '';
+  $('fmComment').value    = (r && r.comment) || '';
+  $('fmFilePath').value   = (r && r.filePath) || '';
+  $('fmUploadUrl').value  = (r && r.uploadUrl) || '';
+
+  sel.channels = new Set((r && r.channels) || []);
+  sel.types    = new Set((r && r.types) || []);
+  sel.scope    = new Set((r && r.scopeChannels) || []);
+  sel.rights   = new Set((r && r.usageRights) || []);
+  sel.edit     = (r && r.editAllowed) || '';
+
+  const clips = (r && r.clips && r.clips.length) ? r.clips : [{ start: '', end: '' }];
+  $('fmClips').innerHTML = clips.map(clipRowHtml).join('');
+
+  renderChips(); updateClipTotal(); updatePeriodPreview();
+  $('formModal').classList.remove('hidden');
+}
+function closeForm() { $('formModal').classList.add('hidden'); editingId = null; }
+
+function saveForm() {
+  const name = $('fmName').value.trim();
+  if (!name) { toast('인플루언서 이름을 입력해 주세요.', 'err'); $('fmName').focus(); return; }
+  if (!$('fmUpload').value && !$('fmStart').value) { toast('업로드 일정을 입력해 주세요.', 'err'); $('fmUpload').focus(); return; }
+
+  const monthsVal = $('fmMonths').value;
+  const data = {
+    brand: $('fmBrand').value,
+    name, account: $('fmAccount').value.trim(), product: $('fmProduct').value.trim(),
+    channels: Array.from(sel.channels), types: Array.from(sel.types),
+    draftDate: $('fmDraft').value, finalDate: $('fmFinal').value, uploadDate: $('fmUpload').value,
+    reuseStart: $('fmStart').value, reuseMonths: monthsVal === 'perm' ? 'perm' : Number(monthsVal),
+    scopeChannels: Array.from(sel.scope), usageRights: Array.from(sel.rights),
+    editAllowed: sel.edit, editNote: $('fmEditNote').value.trim(),
+    clips: readClips(), comment: $('fmComment').value.trim(),
+    filePath: $('fmFilePath').value.trim(), uploadUrl: $('fmUploadUrl').value.trim(),
+    updatedAt: Date.now()
+  };
+
+  if (editingId) {
+    const i = records.findIndex(x => x.id === editingId);
+    records[i] = Object.assign({}, records[i], data);
+  } else {
+    records.unshift(Object.assign({ id: uid(), sourceId: null, createdAt: Date.now() }, data));
+  }
+  saveAll(); closeForm(); render();
+  toast('저장했습니다.', 'ok');
+}
+
+function deleteFromForm() {
+  if (!editingId) return;
+  const id = editingId;
+  closeForm();
+  removeRecord(id);
+}
+
+/* ==========================================================================
+   7. 기존 대시보드에서 불러오기
+   ========================================================================== */
+function stepDate(p, stage) {
+  const v = p.stepDates && p.stepDates[stage];
+  if (!v) return '';
+  return typeof v === 'string' ? v : (v.date || '');
+}
+function guessChannels(p) {
+  const out = new Set();
+  (p.channels || []).forEach(c => {
+    const t = String(c.type || '');
+    if (t.includes('유튜브')) out.add('유튜브');
+    if (t.includes('인스타')) out.add('인스타그램');
+  });
+  if (p.types && p.types.shorts) out.add('유튜브');
+  if (p.types && p.types.reels) out.add('인스타그램');
+  return Array.from(out);
+}
+function guessTypes(p) {
+  const out = [];
+  if (p.types && p.types.ppl) out.push('PPL');
+  if (p.types && p.types.branded) out.push('브랜디드');
+  return out;
+}
+function firstUrl(p) {
+  const c = (p.channels || []).find(c => c.url);
+  return c ? c.url : '';
+}
+
+function openImportModal() { $('importModal').classList.remove('hidden'); if (!sourceList.length) loadSourceList(); else renderSourceList(); }
+function closeImportModal() { $('importModal').classList.add('hidden'); }
+
+async function loadSourceList() {
+  $('impStatus').innerText = '불러오는 중...';
+  $('impList').innerHTML = '';
+  try {
+    const res = await fetch(CFG.syncUrl + '?key=' + encodeURIComponent(CFG.sourceKey) + '&t=' + Date.now());
+    const json = await res.json();
+    if (!json.ok) throw new Error('load failed');
+    sourceList = (json.data && json.data.onsal_pplList) || [];
+    $('impStatus').innerText = '총 ' + sourceList.length + '건';
+    impChecked = new Set();
+    renderSourceList();
+  } catch (e) {
+    $('impStatus').innerText = '';
+    $('impList').innerHTML = '<p class="text-xs text-rose-500 p-4 text-center">기존 대시보드 데이터를 불러오지 못했습니다. 설정에서 주소와 키를 확인해 주세요.</p>';
+  }
+}
+
+function renderSourceList() {
+  const onlyReuse = $('impOnlyReuse').checked;
+  const q = $('impSearch').value.trim().toLowerCase();
+  const imported = new Set(records.map(r => r.sourceId).filter(Boolean));
+
+  const list = sourceList.filter(p => {
+    if (onlyReuse && !(p.types && p.types.reuse)) return false;
+    if (q && !((p.realName || '') + (p.influencer || '')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  $('impList').innerHTML = list.length ? list.map(p => {
+    const done = imported.has(p.id);
+    const chs = guessChannels(p), tps = guessTypes(p);
+    return '<label class="flex items-start gap-3 p-3 rounded-xl border ' + (done ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-200 hover:border-yellow-300 cursor-pointer') + '">' +
+      '<input type="checkbox" ' + (done ? 'disabled' : '') + ' ' + (impChecked.has(p.id) ? 'checked' : '') + ' onchange="toggleImp(\'' + p.id + '\', this.checked)" class="mt-1 accent-yellow-500">' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex flex-wrap items-center gap-1.5">' +
+          '<span class="text-xs font-bold text-slate-800">' + esc(p.realName || p.influencer || '이름 없음') + '</span>' +
+          '<span class="text-[10px] text-slate-400">' + esc(p.influencer || '') + '</span>' +
+          tagPill(p.brand || '', p.brand === '루메아카이브' ? 'bg-skyblue-100 text-skyblue-700' : 'bg-yellow-100 text-yellow-800') +
+          chs.map(channelPill).join('') + tps.map(typePill).join('') +
+          (p.types && p.types.reuse ? tagPill('2차활용 계약', 'bg-orange-100 text-orange-700') : '') +
+          (done ? tagPill('가져옴', 'bg-slate-200 text-slate-600') : '') +
+        '</div>' +
+        '<p class="text-[11px] text-slate-500 mt-1">초안 ' + (stepDate(p, '초안전달') || '—') + ' · 최종본 ' + (stepDate(p, '최종본전달') || '—') + ' · 업로드 <b class="text-yellow-700">' + (stepDate(p, '업로드') || '—') + '</b></p>' +
+      '</div></label>';
+  }).join('') : '<p class="text-xs text-slate-400 p-6 text-center">조건에 맞는 건이 없습니다. 체크를 해제하고 전체를 확인해 보세요.</p>';
+}
+function toggleImp(id, on) { on ? impChecked.add(id) : impChecked.delete(id); }
+
+function doImport() {
+  if (!impChecked.size) { toast('가져올 건을 선택해 주세요.', 'err'); return; }
+  let n = 0;
+  sourceList.forEach(p => {
+    if (!impChecked.has(p.id)) return;
+    records.unshift({
+      id: uid(), sourceId: p.id, createdAt: Date.now(), updatedAt: Date.now(),
+      brand: p.brand || '온살',
+      name: p.realName || p.influencer || '',
+      account: p.influencer || '',
+      product: Array.isArray(p.productList) ? p.productList.join(', ') : (p.product || ''),
+      channels: guessChannels(p), types: guessTypes(p),
+      draftDate: stepDate(p, '초안전달'), finalDate: stepDate(p, '최종본전달'), uploadDate: stepDate(p, '업로드'),
+      reuseStart: '', reuseMonths: 6,
+      scopeChannels: [], usageRights: [], editAllowed: '', editNote: '',
+      clips: [], comment: '', filePath: p.guideUrl || '', uploadUrl: firstUrl(p)
+    });
+    n++;
+  });
+  impChecked = new Set();
+  saveAll(); closeImportModal(); render();
+  toast(n + '건을 가져왔습니다. 2차 활용 조건을 채워 주세요.', 'ok');
+}
+
+/* ==========================================================================
+   8. 엑셀 내보내기
+   ========================================================================== */
+function exportToExcel() {
+  const list = filtered();
+  if (!list.length) { toast('내보낼 데이터가 없습니다.', 'err'); return; }
+  const rows = list.map(r => {
+    const p = periodOf(r), s = statusOf(r);
+    return {
+      '브랜드': r.brand || '', '인플루언서': r.name || '', '계정': r.account || '', '제품': r.product || '',
+      '채널': (r.channels || []).join(', '), '유형': (r.types || []).join(', '),
+      '초안전달': r.draftDate || '', '최종본전달': r.finalDate || '', '업로드일': r.uploadDate || '',
+      '활용개월': r.reuseMonths === 'perm' ? '제한없음' : r.reuseMonths,
+      '활용시작일': p ? fmtDate(p.start) : '', '활용종료일': p && p.end ? fmtDate(p.end) : (p && p.perm ? '제한없음' : ''),
+      '상태': s.label,
+      '활용가능채널': (r.scopeChannels || []).join(', '),
+      '2차가공': r.editAllowed || '', '가공메모': r.editNote || '',
+      '활용가능범위': (r.usageRights || []).join(', '),
+      '제품소개구간': (r.clips || []).map(c => c.start + '~' + c.end).join(', '),
+      '총노출초': clipTotal(r),
+      '활용코멘트': r.comment || '', '원본파일경로': r.filePath || '', '업로드URL': r.uploadUrl || ''
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: ['활용코멘트', '원본파일경로', '업로드URL', '활용가능범위'].includes(k) ? 30 : 14 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '2차활용가능건');
+  XLSX.writeFile(wb, '2차활용_가능건_' + fmtDate(new Date()) + '.xlsx');
+  toast(rows.length + '건을 내보냈습니다.', 'ok');
+}
+
+/* ==========================================================================
+   9. 초기화
+   ========================================================================== */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  ['formModal', 'importModal', 'settingsModal'].forEach(id => $(id).classList.add('hidden'));
+});
+[$('formModal'), $('importModal'), $('settingsModal')].forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.add('hidden'); });
+});
+
+(async function init() {
+  setView(viewMode);
+  render();
+  await pullFromSheet();
+  render();
+})();
+</script>
+</body>
+</html>
