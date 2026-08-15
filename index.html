@@ -48,7 +48,7 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
-          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v7</span></p>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v9</span></p>
         </div>
       </div>
 
@@ -102,6 +102,12 @@
       </div>
     </section>
 
+    <!-- ==================== 채널 탭 ==================== -->
+    <section class="no-print">
+      <div id="channelTabs" class="flex flex-wrap gap-2"></div>
+      <p class="text-[11px] text-slate-400 mt-2">유튜브 탭에는 <b>롱폼 · 숏폼</b>이, 인스타그램 탭에는 <b>피드 · 릴스</b>가 함께 표시됩니다.</p>
+    </section>
+
     <!-- ==================== 필터 바 ==================== -->
     <section class="bg-white p-4 rounded-2xl border border-yellow-100 shadow-sm space-y-3 no-print">
       <div class="flex flex-wrap items-center gap-2">
@@ -112,9 +118,6 @@
         </div>
         <select id="fBrand" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
           <option value="">브랜드 전체</option><option>온살</option><option>루메아카이브</option>
-        </select>
-        <select id="fChannel" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
-          <option value="">채널 전체</option><option>유튜브</option><option>인스타그램</option>
         </select>
         <select id="fType" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
           <option value="">유형 전체</option><option>PPL</option><option>브랜디드</option><option>마이크로 유튜브</option><option>마이크로 릴스</option>
@@ -440,6 +443,7 @@ let CFG = IS_READONLY ? Object.assign({}, DEFAULTS)
                       : Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('reuse_cfg') || '{}'));
 
 const BASE_CHANNELS      = ['유튜브', '인스타그램'];
+const CHANNEL_TABS       = ['전체', '유튜브', '인스타그램'];
 const BASE_TYPES         = ['PPL', '브랜디드', '마이크로 유튜브', '마이크로 릴스'];
 const BASE_EDIT          = ['가공 가능', '가공 불가', '부분 가능(협의)'];
 const BASE_SCOPE         = ['자사몰', '스스(스마트스토어)', '무신사', '쿠팡', '메타'];
@@ -453,6 +457,7 @@ let viewMode  = localStorage.getItem('reuse_view') || 'card';
 const READONLY = IS_READONLY;
 let editingId = null;
 let sourceList = [];
+let tabChannel = '전체';
 let loadState = 'loading';
 let loadError = '';
 let emptyDefaultHtml = '';
@@ -504,6 +509,22 @@ function calcPeriod(startStr, months) {
   const e = addMonths(s, Number(months) || 0);
   e.setDate(e.getDate() - 1);
   return { start: s, end: e, perm: false };
+}
+
+const CHANNEL_ALIAS = { '릴스': '인스타그램', '숏츠': '유튜브', '숏폼': '유튜브', '피드': '인스타그램', '인스타': '인스타그램' };
+function normalizeChannels(list) {
+  let changed = false;
+  (list || []).forEach(r => {
+    const before = (r.channels || []).join('|');
+    const out = [];
+    (r.channels || []).forEach(c => {
+      const v = CHANNEL_ALIAS[c] || c;
+      if (!out.includes(v)) out.push(v);
+    });
+    r.channels = out;
+    if (out.join('|') !== before) changed = true;
+  });
+  return changed;
 }
 
 function periodOf(r) { return calcPeriod(r.reuseStart || r.uploadDate, r.reuseMonths); }
@@ -711,7 +732,8 @@ function setView(v) {
 
 function filtered() {
   const q     = $('fSearch').value.trim().toLowerCase();
-  const brand = $('fBrand').value, ch = $('fChannel').value, tp = $('fType').value;
+  const brand = $('fBrand').value, tp = $('fType').value;
+  const ch = tabChannel === '전체' ? '' : tabChannel;
   const st    = $('fState').value, sc = $('fScope').value, sort = $('fSort').value;
 
   let list = records.filter(r => {
@@ -732,6 +754,21 @@ function filtered() {
   if (sort === 'uploadDesc')  list.sort((a, b) => String(b.uploadDate || '').localeCompare(String(a.uploadDate || '')));
   if (sort === 'nameAsc')     list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
   return list;
+}
+
+const CH_ICON = { '전체': 'fa-solid fa-layer-group', '유튜브': 'fa-brands fa-youtube', '인스타그램': 'fa-brands fa-instagram' };
+
+function setTab(t) { tabChannel = t; render(); }
+
+function renderTabs() {
+  $('channelTabs').innerHTML = CHANNEL_TABS.map(t => {
+    const n = t === '전체' ? records.length : records.filter(r => (r.channels || []).includes(t)).length;
+    const on = tabChannel === t;
+    const cls = on ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400';
+    return '<button onclick="setTab(\'' + t + '\')" class="px-4 py-2.5 text-xs font-bold rounded-xl border transition flex items-center gap-2 ' + cls + '">' +
+      '<i class="' + CH_ICON[t] + '"></i>' + t +
+      '<span class="px-1.5 py-0.5 rounded-md text-[10px] ' + (on ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500') + '">' + n + '</span></button>';
+  }).join('');
 }
 
 function renderStats() {
@@ -766,10 +803,13 @@ function productPills(v) {
   return arr.map(x => '<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-800 text-white"><i class="fa-solid fa-box text-[9px] opacity-70"></i>' + esc(x) + '</span>').join('');
 }
 
+const CH_PILL = {
+  '유튜브':     'bg-red-100 text-red-700',
+  '인스타그램': 'bg-fuchsia-100 text-fuchsia-700'
+};
 function channelPill(c) {
-  return c === '유튜브'
-    ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700"><i class="fa-brands fa-youtube"></i> 유튜브</span>'
-    : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700"><i class="fa-brands fa-instagram"></i> ' + esc(c) + '</span>';
+  return '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + (CH_PILL[c] || 'bg-slate-100 text-slate-600') + '">' +
+         '<i class="' + (CH_ICON[c] || 'fa-solid fa-hashtag') + '"></i> ' + esc(c) + '</span>';
 }
 const TYPE_COLORS = {
   'PPL': 'bg-yellow-100 text-yellow-800',
@@ -875,6 +915,7 @@ function rowHtml(r) {
 }
 
 function render() {
+  renderTabs();
   renderStats();
   renderScopeFilter();
   const list = filtered();
@@ -1222,9 +1263,11 @@ document.addEventListener('keydown', e => {
 (async function init() {
   emptyDefaultHtml = $('emptyState').innerHTML;
   applyReadonly();
+  normalizeChannels(records);
   setView(viewMode);
   render();
   await pullFromSheet();
+  if (normalizeChannels(records)) saveAll();
   render();
 })();
 </script>
