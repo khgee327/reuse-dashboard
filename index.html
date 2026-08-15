@@ -48,7 +48,7 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
-          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v9</span></p>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v10</span></p>
         </div>
       </div>
 
@@ -143,6 +143,9 @@
           <button onclick="setView('card')" id="view-card" class="px-3 py-1.5 rounded-lg bg-white text-yellow-700 shadow-xs"><i class="fa-solid fa-grip"></i> 카드</button>
           <button onclick="setView('table')" id="view-table" class="px-3 py-1.5 rounded-lg text-slate-500 hover:text-slate-800"><i class="fa-solid fa-table-list"></i> 표</button>
         </div>
+        <button data-edit onclick="openBulk()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> 일괄 적용
+        </button>
         <button data-edit onclick="openForm()" class="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
           <i class="fa-solid fa-plus"></i> 새 건 등록
         </button>
@@ -421,6 +424,64 @@
           <button onclick="closeSettings()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl">취소</button>
           <button onclick="saveSettings()" class="px-5 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs">저장 후 다시 연결</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 일괄 적용 모달 ==================== -->
+  <div id="bulkModal" class="hidden fixed inset-0 bg-slate-900/50 z-50 p-4 overflow-y-auto">
+    <div class="bg-white max-w-3xl mx-auto my-6 rounded-2xl shadow-xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-yellow-100 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-slate-600"></i> 조건 일괄 적용</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">지금 화면에 보이는 건에만 적용됩니다. 체크한 항목만 덮어써요.</p>
+        </div>
+        <button onclick="closeBulk()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div id="bkTarget" class="bg-slate-800 text-white text-xs font-bold rounded-xl px-4 py-3"></div>
+
+      <div class="border border-yellow-200 rounded-2xl p-4 space-y-2">
+        <label class="flex items-center gap-2 text-[11px] font-bold text-yellow-800 cursor-pointer">
+          <input type="checkbox" id="bkUsePeriod" class="accent-yellow-500" checked> 2차 활용 기간 적용
+        </label>
+        <div class="flex items-center gap-2">
+          <select id="bkMonths" class="px-3 py-2 text-xs border border-yellow-200 rounded-xl font-bold text-yellow-800 bg-white">
+            <option value="1">1개월</option><option value="2">2개월</option><option value="3">3개월</option>
+            <option value="6">6개월</option><option value="9">9개월</option><option value="12">12개월 (1년)</option>
+            <option value="18">18개월</option><option value="24">24개월 (2년)</option><option value="36">36개월 (3년)</option>
+            <option value="perm">기간 제한 없음</option>
+          </select>
+          <span class="text-[11px] text-slate-500">각 건의 <b>업로드일</b>을 기산일로 잡아 개별 계산됩니다.</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="border border-slate-200 rounded-2xl p-4">
+          <label class="flex items-center gap-2 text-[11px] font-bold text-emerald-700 mb-2 cursor-pointer">
+            <input type="checkbox" id="bkUseScope" class="accent-emerald-500" checked> 활용 가능 채널 적용
+          </label>
+          <div id="bkScope" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div class="border border-slate-200 rounded-2xl p-4">
+          <label class="flex items-center gap-2 text-[11px] font-bold text-sky-700 mb-2 cursor-pointer">
+            <input type="checkbox" id="bkUseRights" class="accent-sky-500" checked> 활용 가능 범위 적용
+          </label>
+          <div id="bkRights" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+
+      <div class="border border-slate-200 rounded-2xl p-4">
+        <label class="flex items-center gap-2 text-[11px] font-bold text-yellow-800 mb-2 cursor-pointer">
+          <input type="checkbox" id="bkUseEdit" class="accent-yellow-500" checked> 2차 가공 여부 적용
+        </label>
+        <div id="bkEdit" class="flex flex-wrap gap-2"></div>
+        <input type="text" id="bkEditNote" placeholder="가공 관련 조건 메모 (비워두면 기존 메모 유지)" class="w-full mt-2 px-3 py-2 text-xs border border-slate-200 rounded-xl">
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+        <button onclick="closeBulk()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl">취소</button>
+        <button onclick="applyBulk()" class="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow-xs">적용하기</button>
       </div>
     </div>
   </div>
@@ -977,6 +1038,9 @@ function renderChips() {
 }
 
 function toggleChip(group, val) {
+  if (group === 'bkEdit')        { bulkSel.edit = (bulkSel.edit === val) ? '' : val; return renderBulkChips(); }
+  if (group === 'bkScope')       { bulkSel.scope.has(val) ? bulkSel.scope.delete(val) : bulkSel.scope.add(val); return renderBulkChips(); }
+  if (group === 'bkRights')      { bulkSel.rights.has(val) ? bulkSel.rights.delete(val) : bulkSel.rights.add(val); return renderBulkChips(); }
   if (group === 'edit') { sel.edit = (sel.edit === val) ? '' : val; }
   else { const s = sel[group]; s.has(val) ? s.delete(val) : s.add(val); }
   renderChips();
@@ -1107,6 +1171,63 @@ function deleteFromForm() {
   const id = editingId;
   closeForm();
   removeRecord(id);
+}
+
+/* ==========================================================================
+   6-2. 조건 일괄 적용
+   ========================================================================== */
+const bulkSel = { scope: new Set(), rights: new Set(), edit: '' };
+
+function renderBulkChips() {
+  $('bkScope').innerHTML  = optScope.map(v => chipBtn('bkScope', v, bulkSel.scope.has(v), 'bg-emerald-500 text-white border-emerald-500 shadow-xs')).join('');
+  $('bkRights').innerHTML = optRights.map(v => chipBtn('bkRights', v, bulkSel.rights.has(v), 'bg-sky-500 text-white border-sky-500 shadow-xs')).join('');
+  $('bkEdit').innerHTML   = BASE_EDIT.map(v => chipBtn('bkEdit', v, bulkSel.edit === v, 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
+}
+
+function openBulk() {
+  const list = filtered();
+  if (!list.length) { toast('적용할 건이 없습니다. 탭이나 필터를 확인해 주세요.', 'err'); return; }
+
+  const seed = list.find(r => (r.scopeChannels || []).length || (r.usageRights || []).length || r.editAllowed) || list[0];
+  bulkSel.scope  = new Set(seed.scopeChannels || []);
+  bulkSel.rights = new Set(seed.usageRights || []);
+  bulkSel.edit   = seed.editAllowed || '';
+  $('bkMonths').value = String(seed.reuseMonths != null ? seed.reuseMonths : 1);
+  $('bkEditNote').value = '';
+
+  $('bkTarget').innerHTML = '<i class="fa-solid fa-crosshairs"></i> 적용 대상: <span class="text-yellow-300">' + list.length + '건</span>' +
+    ' &nbsp;·&nbsp; 채널 탭 「' + esc(tabChannel) + '」' +
+    '<div class="mt-1.5 font-normal text-[11px] text-white/70">' + list.map(r => esc(r.name || '이름없음')).join(' · ') + '</div>';
+
+  renderBulkChips();
+  $('bulkModal').classList.remove('hidden');
+}
+function closeBulk() { $('bulkModal').classList.add('hidden'); }
+
+function applyBulk() {
+  const list = filtered();
+  const useP = $('bkUsePeriod').checked, useS = $('bkUseScope').checked,
+        useR = $('bkUseRights').checked, useE = $('bkUseEdit').checked;
+  if (!useP && !useS && !useR && !useE) { toast('적용할 항목을 하나 이상 체크해 주세요.', 'err'); return; }
+  if (!confirm(list.length + '건에 선택한 조건을 덮어씁니다. 진행할까요?')) return;
+
+  const m = $('bkMonths').value;
+  const note = $('bkEditNote').value.trim();
+  let skipped = 0;
+
+  list.forEach(r => {
+    if (useP) {
+      if (!r.uploadDate && !r.reuseStart) { skipped++; }
+      else { r.reuseMonths = (m === 'perm' ? 'perm' : Number(m)); r.reuseStart = ''; }
+    }
+    if (useS) r.scopeChannels = Array.from(bulkSel.scope);
+    if (useR) r.usageRights   = Array.from(bulkSel.rights);
+    if (useE) { r.editAllowed = bulkSel.edit; if (note) r.editNote = note; }
+    r.updatedAt = Date.now();
+  });
+
+  saveAll(); closeBulk(); render();
+  toast(list.length + '건에 적용했습니다.' + (skipped ? ' (업로드일 없는 ' + skipped + '건은 기간 제외)' : ''), 'ok');
 }
 
 /* ==========================================================================
@@ -1254,9 +1375,9 @@ function exportToExcel() {
    ========================================================================== */
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  ['formModal', 'importModal', 'settingsModal'].forEach(id => $(id).classList.add('hidden'));
+  ['formModal', 'importModal', 'settingsModal', 'bulkModal'].forEach(id => $(id).classList.add('hidden'));
 });
-[$('formModal'), $('importModal'), $('settingsModal')].forEach(m => {
+[$('formModal'), $('importModal'), $('settingsModal'), $('bulkModal')].forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) m.classList.add('hidden'); });
 });
 
