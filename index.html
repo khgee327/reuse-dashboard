@@ -48,7 +48,7 @@
         </div>
         <div>
           <h1 class="text-lg font-bold text-slate-900 leading-tight">2차 활용 가능 콘텐츠 대시보드</h1>
-          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v10</span></p>
+          <p class="text-xs text-slate-500">온살 &amp; 루메아카이브 · PPL / 브랜디드 2차 활용 권리 관리 <span class="text-slate-300 font-semibold">v11</span></p>
         </div>
       </div>
 
@@ -150,7 +150,14 @@
           <i class="fa-solid fa-plus"></i> 새 건 등록
         </button>
       </div>
-      <p class="text-[11px] text-slate-400"><span id="resultCount">0</span>건 표시 중 · 2차 활용 종료일은 <b>업로드일 기준</b>으로 자동 계산됩니다.</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <label data-edit class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer">
+          <input type="checkbox" id="selAll" onchange="toggleSelectAll(this.checked)" class="accent-slate-800 w-3.5 h-3.5"> 현재 목록 전체 선택
+        </label>
+        <span data-edit id="selCount" class="text-[11px] font-bold text-slate-400"></span>
+        <button data-edit id="selClear" onclick="clearSelection()" class="hidden text-[11px] font-bold text-rose-500 hover:underline">선택 해제</button>
+        <p class="text-[11px] text-slate-400 ml-auto"><span id="resultCount">0</span>건 표시 중 · 2차 활용 종료일은 <b>업로드일 기준</b>으로 자동 계산됩니다.</p>
+      </div>
     </section>
 
     <!-- ==================== 목록 ==================== -->
@@ -160,6 +167,7 @@
       <table class="w-full text-xs whitespace-nowrap">
         <thead class="bg-yellow-50/60 text-slate-600">
           <tr>
+            <th data-edit class="px-3 py-2.5 text-left font-bold w-8"></th>
             <th class="px-3 py-2.5 text-left font-bold">인플루언서</th>
             <th class="px-3 py-2.5 text-left font-bold">채널 / 유형</th>
             <th class="px-3 py-2.5 text-left font-bold">초안 / 최종본</th>
@@ -519,6 +527,7 @@ const READONLY = IS_READONLY;
 let editingId = null;
 let sourceList = [];
 let tabChannel = '전체';
+let selectedIds = new Set();
 let loadState = 'loading';
 let loadError = '';
 let emptyDefaultHtml = '';
@@ -832,6 +841,26 @@ function renderTabs() {
   }).join('');
 }
 
+function checkboxHtml(r) {
+  if (READONLY) return '';
+  return '<input type="checkbox" onchange="toggleSelect(\'' + r.id + '\', this.checked)" ' +
+         (selectedIds.has(r.id) ? 'checked ' : '') + 'class="accent-slate-800 w-4 h-4 shrink-0 cursor-pointer">';
+}
+function toggleSelect(id, on) { on ? selectedIds.add(id) : selectedIds.delete(id); render(); }
+function toggleSelectAll(on) {
+  const ids = filtered().map(r => r.id);
+  ids.forEach(id => on ? selectedIds.add(id) : selectedIds.delete(id));
+  render();
+}
+function clearSelection() { selectedIds = new Set(); render(); }
+function renderSelectionUI() {
+  const list = filtered();
+  const n = selectedIds.size;
+  $('selCount').innerText = n ? n + '건 선택됨' : '';
+  $('selClear').classList.toggle('hidden', !n);
+  $('selAll').checked = list.length > 0 && list.every(r => selectedIds.has(r.id));
+}
+
 function renderStats() {
   const c = { active: 0, soon: 0, expired: 0, perm: 0 };
   records.forEach(r => { const s = statusOf(r).state; if (c[s] != null) c[s]++; });
@@ -896,9 +925,13 @@ function cardHtml(r) {
   const total = clipTotal(r);
   const clipsTxt = (r.clips || []).filter(c => c.start || c.end).map(c => esc(c.start || '?') + '~' + esc(c.end || '?')).join(', ');
 
+  const picked = selectedIds.has(r.id);
   return '' +
-  '<div class="bg-white rounded-2xl border border-yellow-100 shadow-sm p-5 space-y-3 hover:shadow-md transition">' +
+  '<div class="bg-white rounded-2xl border shadow-sm p-5 space-y-3 hover:shadow-md transition ' +
+    (picked ? 'border-slate-800 ring-2 ring-slate-800/20' : 'border-yellow-100') + '">' +
     '<div class="flex items-start justify-between gap-3">' +
+      '<div class="flex items-start gap-2.5 min-w-0">' +
+      checkboxHtml(r) +
       '<div class="min-w-0">' +
         '<div class="flex items-center flex-wrap gap-1.5">' +
           tagPill(r.brand || '온살', r.brand === '루메아카이브' ? 'bg-skyblue-100 text-skyblue-700' : 'bg-yellow-100 text-yellow-800') +
@@ -908,7 +941,7 @@ function cardHtml(r) {
         '<div class="flex flex-wrap gap-1 mt-1.5">' +
           (r.channels || []).map(channelPill).join('') + (r.types || []).map(typePill).join('') +
         '</div>' +
-      '</div>' +
+      '</div></div>' +
       '<span class="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-xl border ' + s.cls + '">' + esc(s.label) + '</span>' +
     '</div>' +
 
@@ -955,7 +988,8 @@ function rowHtml(r) {
   const s = statusOf(r);
   const total = clipTotal(r);
   const clipsTxt = (r.clips || []).filter(c => c.start || c.end).map(c => esc(c.start || '?') + '~' + esc(c.end || '?')).join(', ');
-  return '<tr class="hover:bg-yellow-50/30">' +
+  return '<tr class="' + (selectedIds.has(r.id) ? 'bg-slate-50' : 'hover:bg-yellow-50/30') + '">' +
+    (READONLY ? '' : '<td class="px-3 py-2.5">' + checkboxHtml(r) + '</td>') +
     '<td class="px-3 py-2.5"><p class="font-bold text-slate-800">' + nameHtml(r, 'text-slate-800') + '</p><p class="text-[10px] text-slate-400">' + esc(r.account || '') + '</p>' +
       (r.product ? '<div class="flex flex-wrap gap-1 mt-1 max-w-[220px] whitespace-normal">' + productPills(r.product) + '</div>' : '') + '</td>' +
     '<td class="px-3 py-2.5"><div class="flex flex-wrap gap-1">' + (r.channels || []).map(channelPill).join('') + (r.types || []).map(typePill).join('') + '</div></td>' +
@@ -978,6 +1012,7 @@ function rowHtml(r) {
 function render() {
   renderTabs();
   renderStats();
+  renderSelectionUI();
   renderScopeFilter();
   const list = filtered();
   $('resultCount').innerText = list.length;
@@ -1006,7 +1041,7 @@ function render() {
       : '<div class="lg:col-span-2 bg-white p-10 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400">조건에 맞는 건이 없습니다.</div>';
   } else {
     $('tableBody').innerHTML = list.length ? list.map(rowHtml).join('')
-      : '<tr><td colspan="12" class="px-3 py-10 text-center text-xs text-slate-400">조건에 맞는 건이 없습니다.</td></tr>';
+      : '<tr><td colspan="13" class="px-3 py-10 text-center text-xs text-slate-400">조건에 맞는 건이 없습니다.</td></tr>';
   }
 }
 
@@ -1184,9 +1219,11 @@ function renderBulkChips() {
   $('bkEdit').innerHTML   = BASE_EDIT.map(v => chipBtn('bkEdit', v, bulkSel.edit === v, 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
 }
 
+function bulkTargets() { return records.filter(r => selectedIds.has(r.id)); }
+
 function openBulk() {
-  const list = filtered();
-  if (!list.length) { toast('적용할 건이 없습니다. 탭이나 필터를 확인해 주세요.', 'err'); return; }
+  const list = bulkTargets();
+  if (!list.length) { toast('먼저 적용할 건을 체크해 주세요. (카드 왼쪽 위 체크박스)', 'err'); return; }
 
   const seed = list.find(r => (r.scopeChannels || []).length || (r.usageRights || []).length || r.editAllowed) || list[0];
   bulkSel.scope  = new Set(seed.scopeChannels || []);
@@ -1195,8 +1232,7 @@ function openBulk() {
   $('bkMonths').value = String(seed.reuseMonths != null ? seed.reuseMonths : 1);
   $('bkEditNote').value = '';
 
-  $('bkTarget').innerHTML = '<i class="fa-solid fa-crosshairs"></i> 적용 대상: <span class="text-yellow-300">' + list.length + '건</span>' +
-    ' &nbsp;·&nbsp; 채널 탭 「' + esc(tabChannel) + '」' +
+  $('bkTarget').innerHTML = '<i class="fa-solid fa-crosshairs"></i> 선택한 <span class="text-yellow-300">' + list.length + '건</span>에만 적용됩니다' +
     '<div class="mt-1.5 font-normal text-[11px] text-white/70">' + list.map(r => esc(r.name || '이름없음')).join(' · ') + '</div>';
 
   renderBulkChips();
@@ -1205,11 +1241,12 @@ function openBulk() {
 function closeBulk() { $('bulkModal').classList.add('hidden'); }
 
 function applyBulk() {
-  const list = filtered();
+  const list = bulkTargets();
+  if (!list.length) { toast('선택된 건이 없습니다.', 'err'); return; }
   const useP = $('bkUsePeriod').checked, useS = $('bkUseScope').checked,
         useR = $('bkUseRights').checked, useE = $('bkUseEdit').checked;
   if (!useP && !useS && !useR && !useE) { toast('적용할 항목을 하나 이상 체크해 주세요.', 'err'); return; }
-  if (!confirm(list.length + '건에 선택한 조건을 덮어씁니다. 진행할까요?')) return;
+  if (!confirm('선택한 ' + list.length + '건에 조건을 덮어씁니다. 진행할까요?')) return;
 
   const m = $('bkMonths').value;
   const note = $('bkEditNote').value.trim();
@@ -1226,8 +1263,10 @@ function applyBulk() {
     r.updatedAt = Date.now();
   });
 
+  const n = list.length;
+  selectedIds = new Set();
   saveAll(); closeBulk(); render();
-  toast(list.length + '건에 적용했습니다.' + (skipped ? ' (업로드일 없는 ' + skipped + '건은 기간 제외)' : ''), 'ok');
+  toast(n + '건에 적용했습니다.' + (skipped ? ' (업로드일 없는 ' + skipped + '건은 기간 제외)' : ''), 'ok');
 }
 
 /* ==========================================================================
