@@ -105,7 +105,7 @@
     <!-- ==================== 채널 탭 ==================== -->
     <section class="no-print">
       <div id="channelTabs" class="flex flex-wrap gap-2"></div>
-      <p class="text-[11px] text-slate-400 mt-2">유튜브 탭에는 <b>롱폼 · 숏폼</b>이, 인스타그램 탭에는 <b>피드 · 릴스</b>가 함께 표시됩니다.</p>
+      <p class="text-[11px] text-slate-400 mt-2">유튜브 탭에는 <b>롱폼 · 숏폼</b>이, 인스타그램 탭에는 <b>피드 · 릴스</b>가 함께 표시됩니다. <b class="text-rose-500">앰버서더</b> 탭은 채널과 무관하게 <b>유형 = 앰버서더</b>인 건만 모아서 보여줍니다.</p>
     </section>
 
     <!-- ==================== 필터 바 ==================== -->
@@ -120,7 +120,7 @@
           <option value="">브랜드 전체</option><option>온살</option><option>루메아카이브</option>
         </select>
         <select id="fType" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
-          <option value="">유형 전체</option><option>PPL</option><option>브랜디드</option><option>마이크로 유튜브</option><option>마이크로 릴스</option>
+          <option value="">유형 전체</option><option>PPL</option><option>브랜디드</option><option>마이크로 유튜브</option><option>마이크로 릴스</option><option>앰버서더</option>
         </select>
         <select id="fState" onchange="render()" class="px-3 py-2 text-xs border border-slate-200 rounded-xl font-semibold text-slate-600">
           <option value="">상태 전체</option>
@@ -512,8 +512,9 @@ let CFG = IS_READONLY ? Object.assign({}, DEFAULTS)
                       : Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem('reuse_cfg') || '{}'));
 
 const BASE_CHANNELS      = ['유튜브', '인스타그램'];
-const CHANNEL_TABS       = ['전체', '유튜브', '인스타그램'];
-const BASE_TYPES         = ['PPL', '브랜디드', '마이크로 유튜브', '마이크로 릴스'];
+const CHANNEL_TABS       = ['전체', '유튜브', '인스타그램', '앰버서더'];
+const TYPE_TABS          = ['앰버서더'];   // 채널이 아니라 '유형'으로 거르는 탭
+const BASE_TYPES         = ['PPL', '브랜디드', '마이크로 유튜브', '마이크로 릴스', '앰버서더'];
 const BASE_EDIT          = ['가공 가능', '가공 불가', '부분 가능(협의)'];
 const BASE_SCOPE         = ['자사몰', '스스(스마트스토어)', '무신사', '쿠팡', '메타'];
 const BASE_RIGHTS        = ['상세페이지', '썸네일', '광고 소재', 'SNS 게시', '성명권', '초상권', '2차 편집본', '오프라인 인쇄물'];
@@ -803,12 +804,15 @@ function setView(v) {
 function filtered() {
   const q     = $('fSearch').value.trim().toLowerCase();
   const brand = $('fBrand').value, tp = $('fType').value;
-  const ch = tabChannel === '전체' ? '' : tabChannel;
+  const isTypeTab = TYPE_TABS.includes(tabChannel);
+  const ch = (tabChannel === '전체' || isTypeTab) ? '' : tabChannel;
+  const tabType = isTypeTab ? tabChannel : '';
   const st    = $('fState').value, sc = $('fScope').value, sort = $('fSort').value;
 
   let list = records.filter(r => {
     if (brand && r.brand !== brand) return false;
     if (ch && !(r.channels || []).includes(ch)) return false;
+    if (tabType && !(r.types || []).includes(tabType)) return false;
     if (tp && !(r.types || []).includes(tp)) return false;
     if (sc && !(r.scopeChannels || []).includes(sc)) return false;
     if (st && statusOf(r).state !== st) return false;
@@ -826,15 +830,18 @@ function filtered() {
   return list;
 }
 
-const CH_ICON = { '전체': 'fa-solid fa-layer-group', '유튜브': 'fa-brands fa-youtube', '인스타그램': 'fa-brands fa-instagram' };
+const CH_ICON = { '전체': 'fa-solid fa-layer-group', '유튜브': 'fa-brands fa-youtube', '인스타그램': 'fa-brands fa-instagram', '앰버서더': 'fa-solid fa-crown' };
 
 function setTab(t) { tabChannel = t; render(); }
 
 function renderTabs() {
   $('channelTabs').innerHTML = CHANNEL_TABS.map(t => {
-    const n = t === '전체' ? records.length : records.filter(r => (r.channels || []).includes(t)).length;
+    const n = t === '전체' ? records.length
+            : TYPE_TABS.includes(t) ? records.filter(r => (r.types || []).includes(t)).length
+            : records.filter(r => (r.channels || []).includes(t)).length;
     const on = tabChannel === t;
-    const cls = on ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400';
+    const onCls = TYPE_TABS.includes(t) ? 'bg-rose-500 text-white border-rose-500 shadow-sm' : 'bg-slate-900 text-white border-slate-900 shadow-sm';
+    const cls = on ? onCls : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400';
     return '<button onclick="setTab(\'' + t + '\')" class="px-4 py-2.5 text-xs font-bold rounded-xl border transition flex items-center gap-2 ' + cls + '">' +
       '<i class="' + CH_ICON[t] + '"></i>' + t +
       '<span class="px-1.5 py-0.5 rounded-md text-[10px] ' + (on ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500') + '">' + n + '</span></button>';
@@ -905,7 +912,8 @@ const TYPE_COLORS = {
   'PPL': 'bg-yellow-100 text-yellow-800',
   '브랜디드': 'bg-violet-100 text-violet-700',
   '마이크로 유튜브': 'bg-teal-100 text-teal-700',
-  '마이크로 릴스': 'bg-cyan-100 text-cyan-700'
+  '마이크로 릴스': 'bg-cyan-100 text-cyan-700',
+  '앰버서더': 'bg-rose-100 text-rose-700'
 };
 function typePill(t) { return tagPill(t, TYPE_COLORS[t] || 'bg-slate-100 text-slate-600'); }
 function editPill(e) {
@@ -1065,7 +1073,8 @@ function chipBtn(group, val, active, activeCls) {
 function renderChips() {
   $('fmChannels').innerHTML   = BASE_CHANNELS.map(v => chipBtn('channels', v, sel.channels.has(v), 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
   const typeActive = { 'PPL': 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs', '브랜디드': 'bg-violet-500 text-white border-violet-500 shadow-xs',
-                       '마이크로 유튜브': 'bg-teal-500 text-white border-teal-500 shadow-xs', '마이크로 릴스': 'bg-cyan-500 text-white border-cyan-500 shadow-xs' };
+                       '마이크로 유튜브': 'bg-teal-500 text-white border-teal-500 shadow-xs', '마이크로 릴스': 'bg-cyan-500 text-white border-cyan-500 shadow-xs',
+                       '앰버서더': 'bg-rose-500 text-white border-rose-500 shadow-xs' };
   $('fmTypes').innerHTML      = BASE_TYPES.map(v => chipBtn('types', v, sel.types.has(v), typeActive[v] || 'bg-violet-500 text-white border-violet-500 shadow-xs')).join('');
   $('fmEdit').innerHTML       = BASE_EDIT.map(v => chipBtn('edit', v, sel.edit === v, 'bg-yellow-400 text-slate-900 border-yellow-500 shadow-xs')).join('');
   $('fmScopeChannels').innerHTML = optScope.map(v => chipBtn('scope', v, sel.scope.has(v), 'bg-emerald-500 text-white border-emerald-500 shadow-xs')).join('');
@@ -1294,6 +1303,7 @@ function guessTypes(p) {
   if (p.types && p.types.branded) out.push('브랜디드');
   if (p.types && p.types.microPpl) out.push('마이크로 유튜브');
   if (p.types && p.types.microReels) out.push('마이크로 릴스');
+  if (p.types && (p.types.ambassador || p.types.amb || p.types['앰버서더'])) out.push('앰버서더');
   return out;
 }
 function firstUrl(p) {
