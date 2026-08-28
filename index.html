@@ -368,6 +368,7 @@
         <div>
           <h3 class="text-base font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-download text-yellow-600"></i> 기존 PPL 대시보드에서 불러오기</h3>
           <p class="text-[11px] text-slate-500 mt-0.5">인플루언서 이름 · 초안전달 · 최종본전달 · 업로드일정 · 채널 · 유형을 그대로 가져옵니다.</p>
+          <p class="text-[11px] text-violet-600 mt-0.5">2차활용 계약건과 <b>유상 앰버서더</b>가 함께 보입니다. 무상앰버서더는 제외돼요.</p>
         </div>
         <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
@@ -376,7 +377,7 @@
         <button onclick="loadSourceList()" class="px-3 py-2 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-xs font-bold rounded-xl shadow-xs"><i class="fa-solid fa-rotate"></i> 목록 새로고침</button>
         <label class="chip flex items-center gap-1.5 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-xl text-xs font-semibold text-yellow-700">
           <input type="checkbox" id="impOnlyReuse" onchange="renderSourceList()" checked>
-          <i class="fa-solid fa-square-check" id="impOnlyReuseIcon"></i> 2차활용 계약건만 보기
+          <i class="fa-solid fa-square-check" id="impOnlyReuseIcon"></i> 2차활용 계약 · 앰버서더만 보기
         </label>
         <input type="text" id="impSearch" oninput="renderSourceList()" placeholder="이름 검색" class="flex-1 min-w-[140px] px-3 py-2 text-xs border border-slate-200 rounded-xl">
         <span id="impStatus" class="text-[11px] text-slate-400"></span>
@@ -1306,6 +1307,15 @@ function guessTypes(p) {
   if (p.types && (p.types.ambassador || p.types.amb || p.types['앰버서더'])) out.push('앰버서더');
   return out;
 }
+/* 2차 활용 대상: 2차활용 계약건 + 유상 앰버서더 (무상앰버서더 제외) */
+function isPaidAmb(p) {
+  const t = p.types || {};
+  return !!(t.ambassador || t.amb || t.sample || t['앰버서더']) && !t.freeAmb;
+}
+function isReuseTarget(p) {
+  return !!(p.types && p.types.reuse) || isPaidAmb(p);
+}
+
 function firstUrl(p) {
   const c = (p.channels || []).find(c => c.url);
   return c ? c.url : '';
@@ -1337,7 +1347,7 @@ function renderSourceList() {
   const imported = new Set(records.map(r => String(r.sourceId)).filter(v => v && v !== 'null'));
 
   const list = sourceList.filter(p => {
-    if (onlyReuse && !(p.types && p.types.reuse)) return false;
+    if (onlyReuse && !isReuseTarget(p)) return false;
     if (q && !((p.realName || '') + (p.influencer || '')).toLowerCase().includes(q)) return false;
     return true;
   });
@@ -1355,6 +1365,7 @@ function renderSourceList() {
           tagPill(p.brand || '', p.brand === '루메아카이브' ? 'bg-skyblue-100 text-skyblue-700' : 'bg-yellow-100 text-yellow-800') +
           chs.map(channelPill).join('') + tps.map(typePill).join('') +
           (p.types && p.types.reuse ? tagPill('2차활용 계약', 'bg-orange-100 text-orange-700') : '') +
+          (isPaidAmb(p) && !(p.types && p.types.reuse) ? tagPill('앰버서더 2차활용', 'bg-violet-100 text-violet-700') : '') +
           (done ? tagPill('가져옴', 'bg-slate-200 text-slate-600') : '') +
         '</div>' +
         '<p class="text-[11px] text-slate-500 mt-1">초안 ' + (stepDate(p, '초안전달') || '—') + ' · 최종본 ' + (stepDate(p, '최종본전달') || '—') + ' · 업로드 <b class="text-yellow-700">' + (stepDate(p, '업로드') || '—') + '</b></p>' +
