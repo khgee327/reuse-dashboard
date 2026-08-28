@@ -1332,7 +1332,7 @@ async function loadSourceList() {
     const json = await res.json();
     if (!json.ok) throw new Error('load failed');
     sourceList = (json.data && json.data.onsal_pplList) || [];
-    $('impStatus').innerText = '총 ' + sourceList.length + '건';
+    $('impStatus').innerText = '전체 ' + sourceList.length + '건';
     impChecked = new Set();
     renderSourceList();
   } catch (e) {
@@ -1343,6 +1343,8 @@ async function loadSourceList() {
 
 function renderSourceList() {
   const onlyReuse = $('impOnlyReuse').checked;
+  const icon = $('impOnlyReuseIcon');
+  if (icon) icon.className = 'fa-solid ' + (onlyReuse ? 'fa-square-check' : 'fa-square');
   const q = $('impSearch').value.trim().toLowerCase();
   const imported = new Set(records.map(r => String(r.sourceId)).filter(v => v && v !== 'null'));
 
@@ -1370,7 +1372,13 @@ function renderSourceList() {
         '</div>' +
         '<p class="text-[11px] text-slate-500 mt-1">초안 ' + (stepDate(p, '초안전달') || '—') + ' · 최종본 ' + (stepDate(p, '최종본전달') || '—') + ' · 업로드 <b class="text-yellow-700">' + (stepDate(p, '업로드') || '—') + '</b></p>' +
       '</div></label>';
-  }).join('') : '<p class="text-xs text-slate-400 p-6 text-center">조건에 맞는 건이 없습니다. 체크를 해제하고 전체를 확인해 보세요.</p>';
+  }).join('') : (
+    !sourceList.length
+      ? '<p class="text-xs text-slate-400 p-6 text-center">기존 PPL 대시보드에서 받아온 데이터가 없습니다.<br>PPL 대시보드에서 <b>동기화</b>를 한 번 실행한 뒤 <b>목록 새로고침</b>을 눌러 주세요.</p>'
+      : (onlyReuse
+        ? '<p class="text-xs text-slate-400 p-6 text-center">전체 ' + sourceList.length + '건 중 2차활용 대상이 없습니다.<br>위 체크를 해제하면 전체 목록을 볼 수 있어요.</p>'
+        : '<p class="text-xs text-slate-400 p-6 text-center">검색 결과가 없습니다. (전체 ' + sourceList.length + '건)</p>')
+  );
 }
 function toggleImp(id, on) { on ? impChecked.add(id) : impChecked.delete(id); }
 
