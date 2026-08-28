@@ -1324,6 +1324,22 @@ function firstUrl(p) {
 function openImportModal() { $('importModal').classList.remove('hidden'); if (!sourceList.length) loadSourceList(); else renderSourceList(); }
 function closeImportModal() { $('importModal').classList.add('hidden'); }
 
+/* PPL 대시보드는 큰 데이터를 여러 칸으로 쪼개 저장합니다 (onsal_pplList__c0, __c1 ...).
+   원본 칸은 비어 있으므로 조각을 다시 이어붙여야 합니다. */
+function expandSyncChunks(d) {
+  Object.keys(d).forEach(k => {
+    if (!/__cn$/.test(k)) return;
+    const base = k.slice(0, -4);
+    const n = Number(d[k]) || 0;
+    if (!n) return;
+    let str = '';
+    for (let i = 0; i < n; i++) str += (d[base + '__c' + i] || '');
+    if (!str) return;
+    try { d[base] = JSON.parse(str); } catch (e) { console.warn('조각 합치기 실패:', base); }
+  });
+  return d;
+}
+
 async function loadSourceList() {
   $('impStatus').innerText = '불러오는 중...';
   $('impList').innerHTML = '';
@@ -1331,7 +1347,8 @@ async function loadSourceList() {
     const res = await fetch(sourceEndpoint() + '?key=' + encodeURIComponent(CFG.sourceKey) + '&t=' + Date.now());
     const json = await res.json();
     if (!json.ok) throw new Error('load failed');
-    sourceList = (json.data && json.data.onsal_pplList) || [];
+    const data = expandSyncChunks(json.data || {});
+    sourceList = Array.isArray(data.onsal_pplList) ? data.onsal_pplList : [];
     $('impStatus').innerText = '전체 ' + sourceList.length + '건';
     impChecked = new Set();
     renderSourceList();
